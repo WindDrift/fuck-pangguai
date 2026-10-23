@@ -36,16 +36,12 @@ class AuthRepository(
         tokenStore.save(token)
     }
 
-    suspend fun checkLogin(): Boolean {
-        tokenStore.load() ?: return false
-        val response = api.checkLogin(emptyMap())
-        if (!response.isSuccess) {
-            tokenStore.clear()
-            return false
-        }
-        response.data?.token?.takeIf { it.isNotBlank() }?.let { tokenStore.save(it) }
-        return true
-    }
+    /**
+     * Startup only checks the locally stored token. The original user/checkLogin endpoint is a
+     * 秒验 flow that expects mobToken/mobOpToken; calling it with an empty body makes the server
+     * reject a valid token, which previously cleared the login state on every restart.
+     */
+    suspend fun hasStoredToken(): Boolean = tokenStore.load() != null
 
     suspend fun importToken(token: String) {
         tokenStore.save(token)

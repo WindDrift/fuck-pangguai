@@ -112,7 +112,7 @@ class AppController(
         scope.launch {
             _state.value = AppState.Loading
             try {
-                _state.value = if (authRepository.checkLogin()) {
+                _state.value = if (authRepository.hasStoredToken()) {
                     AppState.Ready
                 } else {
                     AppState.Login
