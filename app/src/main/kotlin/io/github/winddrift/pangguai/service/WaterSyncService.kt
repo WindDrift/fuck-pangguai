@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
+import androidx.annotation.RequiresApi
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import io.github.winddrift.pangguai.PangguaiApp
@@ -96,6 +97,26 @@ class WaterSyncService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    @RequiresApi(35)
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        val session = current ?: store.session.value
+        if (session != null) {
+            val updated = session.copy(
+                phase = SessionPhase.PAY_UNKNOWN,
+                error = "前台服务超时，请回到 App 或原 App 核对",
+                updatedAt = System.currentTimeMillis(),
+            )
+            current = updated
+            scope.launch {
+                store.save(updated)
+                historyRepository.save(updated)
+                NotificationChannels.notify(this@WaterSyncService, updated, terminal = true)
+            }
+        }
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
+        stopSelf(startId)
+    }
 
     override fun onDestroy() {
         job?.cancel()
