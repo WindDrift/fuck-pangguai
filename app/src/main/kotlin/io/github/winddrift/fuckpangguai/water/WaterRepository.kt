@@ -8,15 +8,15 @@ import io.github.winddrift.fuckpangguai.net.dto.MsgSyncBean
 import io.github.winddrift.fuckpangguai.net.dto.Unlock
 import io.github.winddrift.fuckpangguai.net.dto.WaterSync
 
-class WaterRepository(private val api: QiekjApi) {
+class WaterRepository(private val api: QiekjApi) : WaterDataSource {
 
-    suspend fun unlock(
+    override suspend fun unlock(
         detail: GoodsDetail,
         skuId: String,
         lat: String,
         lng: String,
-        payType: String = "",
-        iotBOrderNo: String = "",
+        payType: String,
+        iotBOrderNo: String,
     ): Unlock {
         val headers = mapOf(
             "imei" to detail.imei,
@@ -36,33 +36,33 @@ class WaterRepository(private val api: QiekjApi) {
         return response.data ?: throw ApiException(-1, "解锁响应为空")
     }
 
-    suspend fun msgSync(msgId: String): MsgSyncBean {
+    override suspend fun msgSync(msgId: String): MsgSyncBean {
         val response = api.msgSync(mapOf("msgId" to msgId))
         if (!response.isSuccess) throw ApiException(response.code, response.msg)
         return response.data ?: MsgSyncBean()
     }
 
-    fun isDeviceReady(bean: MsgSyncBean): Boolean =
+    override fun isDeviceReady(bean: MsgSyncBean): Boolean =
         bean.state.equals("OK", ignoreCase = true) || bean.code == "05"
 
-    suspend fun waterSync(skuId: String): WaterSync {
+    override suspend fun waterSync(skuId: String): WaterSync {
         val response = api.waterSync(mapOf("skuId" to skuId))
         if (!response.isSuccess) throw ApiException(response.code, response.msg)
         return response.data ?: WaterSync()
     }
 
-    suspend fun endWater(goodsId: String) {
+    override suspend fun endWater(goodsId: String) {
         val response = api.endWater(mapOf("goodsId" to goodsId))
         if (!response.isSuccess) throw ApiException(response.code, response.msg)
     }
 
-    suspend fun afterPayCreate(identify: String): AfterPay {
+    override suspend fun afterPayCreate(identify: String): AfterPay {
         val response = api.afterPayCreate(mapOf("orderNo" to identify))
         if (!response.isSuccess) throw ApiException(response.code, response.msg)
         return response.data ?: throw ApiException(-1, "结算单响应为空")
     }
 
-    suspend fun orderPayStatus(orderNo: String, payType: String): Boolean {
+    override suspend fun orderPayStatus(orderNo: String, payType: String): Boolean {
         val response = api.orderPayStatus(mapOf("orderNo" to orderNo, "payType" to payType))
         if (!response.isSuccess) throw ApiException(response.code, response.msg)
         return response.data == true

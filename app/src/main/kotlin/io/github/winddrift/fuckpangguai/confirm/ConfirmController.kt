@@ -2,24 +2,25 @@ package io.github.winddrift.fuckpangguai.confirm
 
 import io.github.winddrift.fuckpangguai.core.AppConfig
 import io.github.winddrift.fuckpangguai.device.ChannelSelector
-import io.github.winddrift.fuckpangguai.device.DeviceRepository
+import io.github.winddrift.fuckpangguai.device.DeviceDataSource
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
-import io.github.winddrift.fuckpangguai.location.LocationProvider
+import io.github.winddrift.fuckpangguai.location.LocationSource
 import io.github.winddrift.fuckpangguai.net.ApiException
 import io.github.winddrift.fuckpangguai.net.userMessage
 import io.github.winddrift.fuckpangguai.net.dto.PayChannelRoute
 import io.github.winddrift.fuckpangguai.net.dto.Sku
 import io.github.winddrift.fuckpangguai.net.dto.Unlock
-import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
 import io.github.winddrift.fuckpangguai.storage.ConfirmedDevice
-import io.github.winddrift.fuckpangguai.storage.DeviceConfigStore
+import io.github.winddrift.fuckpangguai.storage.DeviceConfigSource
+import io.github.winddrift.fuckpangguai.storage.SettingsSource
 import io.github.winddrift.fuckpangguai.water.WaterDefaults
-import io.github.winddrift.fuckpangguai.water.WaterRepository
+import io.github.winddrift.fuckpangguai.water.WaterDataSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
 data class LocationSnapshot(
@@ -74,11 +75,11 @@ sealed interface ConfirmState {
 
 class ConfirmController(
     private val scope: CoroutineScope,
-    private val deviceRepository: DeviceRepository,
-    private val waterRepository: WaterRepository,
-    private val locationProvider: LocationProvider,
-    private val settingsStore: AppSettingsStore,
-    private val configStore: DeviceConfigStore,
+    private val deviceRepository: DeviceDataSource,
+    private val waterRepository: WaterDataSource,
+    private val locationProvider: LocationSource,
+    private val settingsStore: SettingsSource,
+    private val configStore: DeviceConfigSource,
 ) {
     private val _state = MutableStateFlow<ConfirmState>(ConfirmState.Loading)
     val state = _state.asStateFlow()
@@ -234,13 +235,18 @@ class ConfirmController(
         if (unlock.msgId.isBlank()) {
             throw ApiException(-1, "解锁成功但未返回 msgId")
         }
-        val deadline = System.currentTimeMillis() + 15_000
-        while (System.currentTimeMillis() < deadline) {
-            val bean = waterRepository.msgSync(unlock.msgId)
-            if (waterRepository.isDeviceReady(bean)) return
-            delay(1_000)
+        val ready = withTimeoutOrNull(15_000) {
+            while (true) {
+                val bean = waterRepository.msgSync(unlock.msgId)
+                if (waterRepository.isDeviceReady(bean)) return@withTimeoutOrNull true
+                delay(1_000)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            false
+        } ?: false
+        if (!ready) {
+            throw ApiException(-1, "设备启动超时，请检查设备状态")
         }
-        throw ApiException(-1, "设备启动超时，请检查设备状态")
     }
 
     private fun deviceErrorMessage(code: String, serverMessage: String?): String = when (code) {

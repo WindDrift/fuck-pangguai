@@ -11,16 +11,16 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
-class AppSettingsStore(private val context: Context) {
+class AppSettingsStore(private val context: Context) : SettingsSource {
 
-    suspend fun isOneTapEnabled(): Boolean =
+    override suspend fun isOneTapEnabled(): Boolean =
         context.appDataStore.data.first()[ONE_TAP] ?: false
 
     suspend fun setOneTapEnabled(enabled: Boolean) {
         context.appDataStore.edit { it[ONE_TAP] = enabled }
     }
 
-    suspend fun isDryRun(): Boolean =
+    override suspend fun isDryRun(): Boolean =
         context.appDataStore.data.first()[DRY_RUN] ?: BuildConfig.DEBUG
 
     suspend fun setDryRun(enabled: Boolean) {
@@ -42,13 +42,13 @@ data class ConfirmedDevice(
     val updatedAt: Long,
 )
 
-class DeviceConfigStore(private val context: Context) {
+class DeviceConfigStore(private val context: Context) : DeviceConfigSource {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun find(goodsId: String): ConfirmedDevice? =
+    override suspend fun find(goodsId: String): ConfirmedDevice? =
         load().firstOrNull { it.goodsId == goodsId }
 
-    suspend fun save(device: ConfirmedDevice) {
+    override suspend fun save(device: ConfirmedDevice) {
         val updated = load().filterNot { it.goodsId == device.goodsId } + device
         val encoded = json.encodeToString(
             ListSerializer(ConfirmedDevice.serializer()),

@@ -15,7 +15,7 @@ data class ResolvedDevice(
     val sourceValue: String,
 )
 
-class DeviceRepository(private val api: QiekjApi) {
+class DeviceRepository(private val api: QiekjApi) : DeviceDataSource {
 
     suspend fun resolve(key: String, value: String): ResolvedDevice {
         val scanResponse = api.scanV2(mapOf(key to value))
@@ -36,13 +36,13 @@ class DeviceRepository(private val api: QiekjApi) {
         return ResolvedDevice(scan, detail, sourceKey = key, sourceValue = value)
     }
 
-    suspend fun loadSkus(goodsId: String): List<Sku> {
+    override suspend fun loadSkus(goodsId: String): List<Sku> {
         val response = api.skus(mapOf("goodsId" to goodsId))
         if (!response.isSuccess) throw ApiException(response.code, response.msg)
         return response.data.orEmpty()
     }
 
-    suspend fun loadChannels(detail: GoodsDetail): List<PayChannelRoute> {
+    override suspend fun loadChannels(detail: GoodsDetail): List<PayChannelRoute> {
         val response = api.afterPayChannels(
             mapOf(
                 "imei" to detail.imei,
@@ -55,7 +55,7 @@ class DeviceRepository(private val api: QiekjApi) {
         return response.data.orEmpty()
     }
 
-    suspend fun bindChannel(method: Int) {
+    override suspend fun bindChannel(method: Int) {
         val response = api.addAfterPayChannel(mapOf("method" to method.toString()))
         if (!response.isSuccess) throw ApiException(response.code, response.msg)
     }

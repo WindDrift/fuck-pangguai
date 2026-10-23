@@ -13,16 +13,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
-class LocationProvider(private val context: Context) {
+class LocationProvider(private val context: Context) : LocationSource {
 
-    fun hasPermission(): Boolean =
+    override fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
 
     @SuppressLint("MissingPermission")
-    suspend fun getCurrentLocation(): Location? {
+    override suspend fun getCurrentLocation(): GeoPoint? {
         if (!hasPermission()) return null
         val manager = context.getSystemService(LocationManager::class.java) ?: return null
         val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
@@ -32,11 +32,11 @@ class LocationProvider(private val context: Context) {
 
         for (provider in providers) {
             val location = withTimeoutOrNull(10_000) { requestCurrent(manager, provider) }
-            if (location != null) return location
+            if (location != null) return location.toGeoPoint()
         }
 
         return providers.firstNotNullOfOrNull { provider ->
-            runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
+            runCatching { manager.getLastKnownLocation(provider)?.toGeoPoint() }.getOrNull()
         }
     }
 
@@ -66,3 +66,5 @@ class LocationProvider(private val context: Context) {
         }
     }
 }
+
+private fun Location.toGeoPoint(): GeoPoint = GeoPoint(latitude, longitude)
