@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
                 PangguaiRoot(
                     controller = graph.controller,
                     scanController = graph.scanController,
+                    newConfirmController = graph::newConfirmController,
                 )
             }
         }

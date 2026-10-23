@@ -9,6 +9,11 @@ import io.github.winddrift.pangguai.storage.TokenStore
 import io.github.winddrift.pangguai.device.DeviceRepository
 import io.github.winddrift.pangguai.nfc.NfcTagStore
 import io.github.winddrift.pangguai.scan.ScanController
+import io.github.winddrift.pangguai.water.WaterRepository
+import io.github.winddrift.pangguai.location.LocationProvider
+import io.github.winddrift.pangguai.storage.AppSettingsStore
+import io.github.winddrift.pangguai.storage.DeviceConfigStore
+import io.github.winddrift.pangguai.confirm.ConfirmController
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
@@ -87,5 +92,14 @@ class AppGraph(context: Context) {
         scope = scope,
         deviceRepository = DeviceRepository(api),
         nfcTagStore = NfcTagStore(appContext),
+    )
+
+    fun newConfirmController(): ConfirmController = ConfirmController(
+        scope = scope,
+        deviceRepository = DeviceRepository(api),
+        waterRepository = WaterRepository(api),
+        locationProvider = LocationProvider(appContext),
+        settingsStore = AppSettingsStore(appContext),
+        configStore = DeviceConfigStore(appContext),
     )
 }

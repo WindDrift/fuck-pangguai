@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.winddrift.pangguai.device.ResolvedDevice
 import io.github.winddrift.pangguai.nfc.NfcReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -46,6 +47,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 fun ScanScreen(
     controller: ScanController,
+    onDeviceReady: (ResolvedDevice) -> Unit,
     onLogout: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -185,8 +187,10 @@ fun ScanScreen(
                             },
                             current.device.detail.deviceErrorCode?.let { "设备状态码：$it" },
                         ).filterNotNull(),
-                        primaryText = "重新扫码",
-                        onPrimary = controller::reset,
+                        primaryText = "继续",
+                        onPrimary = { onDeviceReady(current.device) },
+                        secondaryText = "重新扫码",
+                        onSecondary = controller::reset,
                     )
                 }
 
