@@ -3,6 +3,7 @@ package io.github.winddrift.pangguai.service
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -67,6 +68,7 @@ object NotificationChannels {
             .build()
     }
 
+    @SuppressLint("MissingPermission")
     fun notify(context: Context, session: WaterSession?, terminal: Boolean = false) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=

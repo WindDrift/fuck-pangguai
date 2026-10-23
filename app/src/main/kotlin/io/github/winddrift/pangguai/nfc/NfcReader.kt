@@ -1,5 +1,6 @@
 package io.github.winddrift.pangguai.nfc
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -15,6 +16,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 
+@SuppressLint("MissingPermission")
 @Composable
 fun NfcReader(onPayload: (NfcPayload) -> Unit) {
     val context = LocalContext.current

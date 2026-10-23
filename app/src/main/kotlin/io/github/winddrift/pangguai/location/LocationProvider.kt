@@ -1,6 +1,7 @@
 package io.github.winddrift.pangguai.location
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
@@ -20,6 +21,7 @@ class LocationProvider(private val context: Context) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
 
+    @SuppressLint("MissingPermission")
     suspend fun getCurrentLocation(): Location? {
         if (!hasPermission()) return null
         val manager = context.getSystemService(LocationManager::class.java) ?: return null
@@ -38,6 +40,7 @@ class LocationProvider(private val context: Context) {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private suspend fun requestCurrent(
         manager: LocationManager,
         provider: String,
