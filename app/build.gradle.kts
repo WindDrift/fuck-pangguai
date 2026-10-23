@@ -15,11 +15,11 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "io.github.winddrift.pangguai"
+    namespace = "io.github.winddrift.fuckpangguai"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.winddrift.pangguai"
+        applicationId = "io.github.winddrift.fuckpangguai"
         minSdk = 31
         targetSdk = 37
         versionCode = 1
