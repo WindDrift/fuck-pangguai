@@ -11,12 +11,13 @@ import io.github.winddrift.pangguai.AppController
 import io.github.winddrift.pangguai.AppState
 import io.github.winddrift.pangguai.auth.DisclaimerScreen
 import io.github.winddrift.pangguai.auth.LoginScreen
-import io.github.winddrift.pangguai.ui.scan.ScanPlaceholderScreen
+import io.github.winddrift.pangguai.scan.ScanController
+import io.github.winddrift.pangguai.scan.ScanScreen
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun PangguaiRoot(controller: AppController) {
+fun PangguaiRoot(controller: AppController, scanController: ScanController) {
     val state by controller.state.collectAsStateWithLifecycle()
     val busy by controller.busy.collectAsStateWithLifecycle()
     val message by controller.message.collectAsStateWithLifecycle()
@@ -33,7 +34,7 @@ fun PangguaiRoot(controller: AppController) {
             onLogin = controller::login,
             onImportToken = controller::importToken,
         )
-        AppState.Ready -> ScanPlaceholderScreen(onLogout = controller::logout)
+        AppState.Ready -> ScanScreen(controller = scanController, onLogout = controller::logout)
     }
 }
 

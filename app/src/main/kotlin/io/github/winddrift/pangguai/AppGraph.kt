@@ -6,6 +6,9 @@ import io.github.winddrift.pangguai.net.RequestLogInterceptor
 import io.github.winddrift.pangguai.net.SignInterceptor
 import io.github.winddrift.pangguai.storage.DisclaimerStore
 import io.github.winddrift.pangguai.storage.TokenStore
+import io.github.winddrift.pangguai.device.DeviceRepository
+import io.github.winddrift.pangguai.nfc.NfcTagStore
+import io.github.winddrift.pangguai.scan.ScanController
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
@@ -78,5 +81,11 @@ class AppGraph(context: Context) {
         scope = scope,
         authRepository = authRepository,
         disclaimerStore = disclaimerStore,
+    )
+
+    val scanController = ScanController(
+        scope = scope,
+        deviceRepository = DeviceRepository(api),
+        nfcTagStore = NfcTagStore(appContext),
     )
 }

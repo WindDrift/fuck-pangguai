@@ -11,10 +11,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val controller = (application as PangguaiApp).graph.controller
+        val graph = (application as PangguaiApp).graph
         setContent {
             PangguaiTheme {
-                PangguaiRoot(controller)
+                PangguaiRoot(
+                    controller = graph.controller,
+                    scanController = graph.scanController,
+                )
             }
         }
     }
