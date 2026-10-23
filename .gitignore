@@ -1,0 +1,26 @@
+# reverse engineering data
+/reverse/
+/plan/
+
+# Android / Gradle
+.gradle/
+build/
+**/build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# signing / secrets
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+
+# OS / logs
+.DS_Store
+Thumbs.db
+*.log
