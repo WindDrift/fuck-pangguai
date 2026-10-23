@@ -19,7 +19,7 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun ScanPlaceholderScreen() {
+fun ScanPlaceholderScreen(onLogout: () -> Unit) {
     val colors = MiuixTheme.colorScheme
     Scaffold(
         topBar = { TopAppBar(title = "接水") },
@@ -50,6 +50,10 @@ fun ScanPlaceholderScreen() {
                     Spacer(Modifier.height(24.dp))
                     Button(onClick = { }) {
                         Text("开始扫码")
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = onLogout) {
+                        Text("退出登录")
                     }
                 }
             }
