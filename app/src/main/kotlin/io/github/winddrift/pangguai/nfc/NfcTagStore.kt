@@ -42,6 +42,15 @@ class NfcTagStore(private val context: Context) {
         context.appDataStore.edit { it[TAGS] = encoded }
     }
 
+    suspend fun remove(tagId: String) {
+        val remaining = load().filterNot { it.tagId == tagId }
+        val encoded = json.encodeToString(
+            ListSerializer(NfcTagBinding.serializer()),
+            remaining,
+        )
+        context.appDataStore.edit { it[TAGS] = encoded }
+    }
+
     private companion object {
         val TAGS = stringPreferencesKey("nfc_tag_bindings")
     }

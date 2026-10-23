@@ -8,6 +8,7 @@ import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import io.github.winddrift.pangguai.PangguaiApp
+import io.github.winddrift.pangguai.history.HistoryRepository
 import io.github.winddrift.pangguai.net.userMessage
 import io.github.winddrift.pangguai.water.SessionPhase
 import io.github.winddrift.pangguai.water.SettlementDecider
@@ -31,6 +32,7 @@ class WaterSyncService : Service() {
     private val json = Json { ignoreUnknownKeys = true }
     private lateinit var store: WaterSessionStore
     private lateinit var repository: WaterRepository
+    private lateinit var historyRepository: HistoryRepository
     private var job: Job? = null
 
     @Volatile
@@ -46,6 +48,7 @@ class WaterSyncService : Service() {
         val graph = (application as PangguaiApp).graph
         store = graph.waterSessionStore
         repository = graph.waterRepository
+        historyRepository = graph.historyRepository
         NotificationChannels.ensure(this)
     }
 
@@ -273,6 +276,7 @@ class WaterSyncService : Service() {
         current = session
         scope.launch {
             store.save(session)
+            historyRepository.save(session)
             NotificationChannels.notify(this@WaterSyncService, session, terminal = true)
             ServiceCompat.stopForeground(this@WaterSyncService, ServiceCompat.STOP_FOREGROUND_DETACH)
             stopSelf()

@@ -48,6 +48,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun ScanScreen(
     controller: ScanController,
     onDeviceReady: (ResolvedDevice) -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenSettings: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -239,6 +241,21 @@ fun ScanScreen(
                             }
                         },
                     )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onOpenHistory,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("记录")
+                }
+                Button(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("设置")
                 }
             }
 

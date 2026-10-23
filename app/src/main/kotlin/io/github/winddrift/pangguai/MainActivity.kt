@@ -19,6 +19,9 @@ class MainActivity : ComponentActivity() {
                     scanController = graph.scanController,
                     newConfirmController = graph::newConfirmController,
                     waterSessionManager = graph.waterSessionManager,
+                    historyRepository = graph.historyRepository,
+                    settingsStore = graph.settingsStore,
+                    nfcTagStore = graph.nfcTagStore,
                 )
             }
         }

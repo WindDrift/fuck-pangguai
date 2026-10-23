@@ -18,7 +18,18 @@ data class RequestLogEntry(
     val requestBody: String,
     val responseBody: String,
     val error: String? = null,
-)
+) {
+    fun toCurl(): String {
+        val headerArgs = requestHeaders.lineSequence()
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { "-H ${shellQuote(it)}" }
+        val bodyArg = if (requestBody.isBlank()) "" else " --data ${shellQuote(requestBody)}"
+        return "curl -X $method $headerArgs$bodyArg ${shellQuote(url)}"
+    }
+
+    private fun shellQuote(value: String): String =
+        "'" + value.replace("'", "'''") + "'"
+}
 
 object RequestLog {
     private const val MAX_ENTRIES = 100

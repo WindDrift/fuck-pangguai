@@ -17,6 +17,12 @@ import io.github.winddrift.pangguai.auth.LoginScreen
 import io.github.winddrift.pangguai.confirm.ConfirmController
 import io.github.winddrift.pangguai.confirm.ConfirmScreen
 import io.github.winddrift.pangguai.device.ResolvedDevice
+import io.github.winddrift.pangguai.debug.DebugScreen
+import io.github.winddrift.pangguai.history.HistoryRepository
+import io.github.winddrift.pangguai.history.HistoryScreen
+import io.github.winddrift.pangguai.nfc.NfcTagStore
+import io.github.winddrift.pangguai.settings.SettingsScreen
+import io.github.winddrift.pangguai.storage.AppSettingsStore
 import io.github.winddrift.pangguai.scan.ScanController
 import io.github.winddrift.pangguai.scan.ScanScreen
 import io.github.winddrift.pangguai.using.UsingScreen
@@ -30,6 +36,9 @@ fun PangguaiRoot(
     scanController: ScanController,
     newConfirmController: () -> ConfirmController,
     waterSessionManager: WaterSessionManager,
+    historyRepository: HistoryRepository,
+    settingsStore: AppSettingsStore,
+    nfcTagStore: NfcTagStore,
 ) {
     val state by controller.state.collectAsStateWithLifecycle()
     val busy by controller.busy.collectAsStateWithLifecycle()
@@ -38,6 +47,7 @@ fun PangguaiRoot(
     val activeSession by waterSessionManager.session.collectAsStateWithLifecycle()
 
     var activeDevice by remember { mutableStateOf<ResolvedDevice?>(null) }
+    var overlay by remember { mutableStateOf(Overlay.None) }
 
     if (activeSession != null) {
         UsingScreen(
@@ -61,29 +71,54 @@ fun PangguaiRoot(
         )
         AppState.Ready -> {
             val device = activeDevice
-            if (device == null) {
-                ScanScreen(
-                    controller = scanController,
-                    onDeviceReady = { activeDevice = it },
-                    onLogout = {
-                        activeDevice = null
-                        controller.logout()
-                    },
-                )
-            } else {
-                ConfirmScreen(
+            when {
+                device != null -> ConfirmScreen(
                     device = device,
                     controller = remember(device) { newConfirmController() },
                     onUnlocked = { unlocked ->
                         activeDevice = null
+                        overlay = Overlay.None
                         waterSessionManager.start(unlocked)
                     },
                     onBack = { activeDevice = null },
+                )
+
+                overlay == Overlay.History -> HistoryScreen(
+                    repository = historyRepository,
+                    onBack = { overlay = Overlay.None },
+                )
+
+                overlay == Overlay.Settings -> SettingsScreen(
+                    settingsStore = settingsStore,
+                    historyRepository = historyRepository,
+                    onBack = { overlay = Overlay.None },
+                    onOpenDebug = { overlay = Overlay.Debug },
+                )
+
+                overlay == Overlay.Debug -> DebugScreen(
+                    settingsStore = settingsStore,
+                    nfcTagStore = nfcTagStore,
+                    onImportToken = controller::importToken,
+                    onBack = { overlay = Overlay.Settings },
+                )
+
+                else -> ScanScreen(
+                    controller = scanController,
+                    onDeviceReady = { activeDevice = it },
+                    onOpenHistory = { overlay = Overlay.History },
+                    onOpenSettings = { overlay = Overlay.Settings },
+                    onLogout = {
+                        activeDevice = null
+                        overlay = Overlay.None
+                        controller.logout()
+                    },
                 )
             }
         }
     }
 }
+
+private enum class Overlay { None, History, Settings, Debug }
 
 @Composable
 private fun LoadingScreen() {
