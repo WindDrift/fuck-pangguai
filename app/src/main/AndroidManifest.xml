@@ -13,6 +13,10 @@
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
+    <queries>
+        <package android:name="com.qiekj.user" />
+    </queries>
+
     <application
         android:name=".PangguaiApp"
         android:allowBackup="false"
