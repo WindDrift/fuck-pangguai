@@ -64,13 +64,13 @@ fun NfcReader(onPayload: (NfcPayload) -> Unit) {
     }
 }
 
-private fun readNdefUrl(tag: Tag): String? {
-    val ndef = Ndef.get(tag) ?: return null
-    val message = ndef.cachedNdefMessage ?: ndef.ndefMessage ?: return null
-    return message.records.firstNotNullOfOrNull { record ->
+private fun readNdefUrl(tag: Tag): String? = runCatching {
+    val ndef = Ndef.get(tag) ?: return@runCatching null
+    val message = ndef.cachedNdefMessage ?: ndef.ndefMessage ?: return@runCatching null
+    message.records.firstNotNullOfOrNull { record ->
         runCatching { record.toUri()?.toString() }.getOrNull()
     }
-}
+}.getOrNull()
 
 private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 

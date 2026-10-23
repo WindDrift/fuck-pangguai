@@ -80,7 +80,9 @@ fun ScanScreen(
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val value = withContext(Dispatchers.IO) { QrImageDecoder.decode(context, uri) }
+            val value = runCatching {
+                withContext(Dispatchers.IO) { QrImageDecoder.decode(context, uri) }
+            }.getOrNull()
             if (value.isNullOrBlank()) {
                 controller.showMessage("相册图片里没有识别到二维码")
             } else {

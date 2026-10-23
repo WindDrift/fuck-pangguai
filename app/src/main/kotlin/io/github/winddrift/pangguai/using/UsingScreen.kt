@@ -93,13 +93,18 @@ fun UsingScreen(
             }
 
             if (!terminal) {
-                if (session.supportAppUserFinish) {
+                if (session.phase == SessionPhase.USING && session.supportAppUserFinish) {
                     Button(onClick = onEnd, modifier = Modifier.fillMaxWidth()) {
                         Text("结束使用")
                     }
-                } else {
+                } else if (session.phase == SessionPhase.USING) {
                     Text(
                         "该设备不支持 App 内结束，请在设备上结束。",
+                        style = MiuixTheme.textStyles.body2,
+                    )
+                } else {
+                    Text(
+                        "正在结算/结束中，请稍候，不要重复操作。",
                         style = MiuixTheme.textStyles.body2,
                     )
                 }

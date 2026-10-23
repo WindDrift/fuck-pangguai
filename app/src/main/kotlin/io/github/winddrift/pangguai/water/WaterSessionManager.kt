@@ -41,6 +41,8 @@ class WaterSessionManager(
     }
 
     fun end() {
+        val phase = store.session.value?.phase
+        if (phase == SessionPhase.SETTLING || phase == SessionPhase.ENDING) return
         WaterSyncService.end(context)
     }
 

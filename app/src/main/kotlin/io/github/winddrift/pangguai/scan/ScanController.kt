@@ -72,12 +72,16 @@ class ScanController(
         if (!tagId.isNullOrBlank()) {
             scope.launch {
                 _state.value = ScanState.Loading
-                val binding = nfcTagStore.find(tagId)
-                if (binding == null) {
-                    pendingTagId = tagId
-                    _state.value = ScanState.NeedsBind(tagId, payload)
-                } else {
-                    resolveNow("SN", binding.sn, null)
+                try {
+                    val binding = nfcTagStore.find(tagId)
+                    if (binding == null) {
+                        pendingTagId = tagId
+                        _state.value = ScanState.NeedsBind(tagId, payload)
+                    } else {
+                        resolveNow("SN", binding.sn, null)
+                    }
+                } catch (throwable: Throwable) {
+                    _state.value = ScanState.Message(throwable.userMessage())
                 }
             }
             return
@@ -92,22 +96,26 @@ class ScanController(
         val current = _state.value
         if (current !is ScanState.ConfirmBind) return
         scope.launch {
-            val detail = current.device.detail
-            nfcTagStore.bind(
-                NfcTagBinding(
-                    tagId = current.tagId,
-                    sn = if (current.device.sourceKey == "SN") {
-                        current.device.sourceValue
-                    } else {
-                        detail.imei
-                    },
-                    deviceName = detail.name,
-                    goodsId = current.device.scan.id,
-                    updatedAt = System.currentTimeMillis(),
-                ),
-            )
-            pendingTagId = null
-            _state.value = ScanState.DeviceReady(current.device)
+            try {
+                val detail = current.device.detail
+                nfcTagStore.bind(
+                    NfcTagBinding(
+                        tagId = current.tagId,
+                        sn = if (current.device.sourceKey == "SN") {
+                            current.device.sourceValue
+                        } else {
+                            detail.imei
+                        },
+                        deviceName = detail.name,
+                        goodsId = current.device.scan.id,
+                        updatedAt = System.currentTimeMillis(),
+                    ),
+                )
+                pendingTagId = null
+                _state.value = ScanState.DeviceReady(current.device)
+            } catch (throwable: Throwable) {
+                _state.value = ScanState.Message(throwable.userMessage())
+            }
         }
     }
 
