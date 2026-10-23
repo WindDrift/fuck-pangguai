@@ -98,6 +98,7 @@ fun PangguaiRoot(
                 overlay == Overlay.Debug -> DebugScreen(
                     settingsStore = settingsStore,
                     nfcTagStore = nfcTagStore,
+                    scanController = scanController,
                     onImportToken = controller::importToken,
                     onBack = { overlay = Overlay.Settings },
                 )

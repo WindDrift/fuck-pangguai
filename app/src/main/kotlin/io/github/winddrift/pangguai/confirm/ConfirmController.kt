@@ -1,6 +1,7 @@
 package io.github.winddrift.pangguai.confirm
 
 import io.github.winddrift.pangguai.core.AppConfig
+import io.github.winddrift.pangguai.device.ChannelSelector
 import io.github.winddrift.pangguai.device.DeviceRepository
 import io.github.winddrift.pangguai.device.ResolvedDevice
 import io.github.winddrift.pangguai.location.LocationProvider
@@ -136,7 +137,7 @@ class ConfirmController(
                     ?.let { id -> skus.indexOfFirst { it.skuId == id } }
                     ?.takeIf { it >= 0 }
                     ?: 0
-                val channelIndex = selectChannelIndex(channels, confirmed?.channelMethod)
+                val channelIndex = ChannelSelector.selectIndex(channels, confirmed?.channelMethod).coerceAtLeast(0)
                 val ready = ConfirmReady(
                     device = device,
                     skus = skus,
@@ -240,21 +241,6 @@ class ConfirmController(
             delay(1_000)
         }
         throw ApiException(-1, "设备启动超时，请检查设备状态")
-    }
-
-    private fun selectChannelIndex(
-        channels: List<PayChannelRoute>,
-        lastMethod: Int?,
-    ): Int {
-        lastMethod?.let { method ->
-            val index = channels.indexOfFirst { it.method == method }
-            if (index >= 0) return index
-        }
-        val checked = channels.indexOfFirst { it.checked }
-        if (checked >= 0) return checked
-        val default = channels.indexOfFirst { it.defaultFlag }
-        if (default >= 0) return default
-        return 0
     }
 
     private fun deviceErrorMessage(code: String, serverMessage: String?): String = when (code) {
