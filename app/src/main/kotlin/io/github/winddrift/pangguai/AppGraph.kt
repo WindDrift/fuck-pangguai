@@ -10,6 +10,8 @@ import io.github.winddrift.pangguai.device.DeviceRepository
 import io.github.winddrift.pangguai.nfc.NfcTagStore
 import io.github.winddrift.pangguai.scan.ScanController
 import io.github.winddrift.pangguai.water.WaterRepository
+import io.github.winddrift.pangguai.water.WaterSessionManager
+import io.github.winddrift.pangguai.water.WaterSessionStore
 import io.github.winddrift.pangguai.location.LocationProvider
 import io.github.winddrift.pangguai.storage.AppSettingsStore
 import io.github.winddrift.pangguai.storage.DeviceConfigStore
@@ -80,6 +82,15 @@ class AppGraph(context: Context) {
 
     val api: QiekjApi = retrofit.create(QiekjApi::class.java)
 
+    val waterRepository = WaterRepository(api)
+    val waterSessionStore = WaterSessionStore(appContext)
+    val waterSessionManager = WaterSessionManager(
+        context = appContext,
+        scope = scope,
+        store = waterSessionStore,
+        waterRepository = waterRepository,
+    )
+
     private val authRepository = AuthRepository(api, tokenStore)
 
     val controller = AppController(
@@ -97,7 +108,7 @@ class AppGraph(context: Context) {
     fun newConfirmController(): ConfirmController = ConfirmController(
         scope = scope,
         deviceRepository = DeviceRepository(api),
-        waterRepository = WaterRepository(api),
+        waterRepository = waterRepository,
         locationProvider = LocationProvider(appContext),
         settingsStore = AppSettingsStore(appContext),
         configStore = DeviceConfigStore(appContext),

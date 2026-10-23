@@ -19,6 +19,8 @@ import io.github.winddrift.pangguai.confirm.ConfirmScreen
 import io.github.winddrift.pangguai.device.ResolvedDevice
 import io.github.winddrift.pangguai.scan.ScanController
 import io.github.winddrift.pangguai.scan.ScanScreen
+import io.github.winddrift.pangguai.using.UsingScreen
+import io.github.winddrift.pangguai.water.WaterSessionManager
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -27,13 +29,24 @@ fun PangguaiRoot(
     controller: AppController,
     scanController: ScanController,
     newConfirmController: () -> ConfirmController,
+    waterSessionManager: WaterSessionManager,
 ) {
     val state by controller.state.collectAsStateWithLifecycle()
     val busy by controller.busy.collectAsStateWithLifecycle()
     val message by controller.message.collectAsStateWithLifecycle()
     val codeSent by controller.codeSent.collectAsStateWithLifecycle()
+    val activeSession by waterSessionManager.session.collectAsStateWithLifecycle()
 
     var activeDevice by remember { mutableStateOf<ResolvedDevice?>(null) }
+
+    if (activeSession != null) {
+        UsingScreen(
+            session = activeSession!!,
+            onEnd = waterSessionManager::end,
+            onDone = waterSessionManager::clear,
+        )
+        return
+    }
 
     when (state) {
         AppState.Loading -> LoadingScreen()
@@ -61,6 +74,10 @@ fun PangguaiRoot(
                 ConfirmScreen(
                     device = device,
                     controller = remember(device) { newConfirmController() },
+                    onUnlocked = { unlocked ->
+                        activeDevice = null
+                        waterSessionManager.start(unlocked)
+                    },
                     onBack = { activeDevice = null },
                 )
             }

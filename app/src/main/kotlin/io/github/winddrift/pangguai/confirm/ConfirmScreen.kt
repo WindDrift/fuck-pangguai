@@ -30,6 +30,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun ConfirmScreen(
     device: ResolvedDevice,
     controller: ConfirmController,
+    onUnlocked: (UnlockSession) -> Unit,
     onBack: () -> Unit,
 ) {
     val state by controller.state.collectAsStateWithLifecycle()
@@ -117,6 +118,7 @@ fun ConfirmScreen(
 
                 is ConfirmState.Unlocked -> {
                     val session = current.session
+                    LaunchedEffect(session) { onUnlocked(session) }
                     InfoCard(
                         title = "已解锁",
                         lines = listOf(

@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
                     controller = graph.controller,
                     scanController = graph.scanController,
                     newConfirmController = graph::newConfirmController,
+                    waterSessionManager = graph.waterSessionManager,
                 )
             }
         }
