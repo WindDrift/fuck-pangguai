@@ -108,6 +108,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.miuix.ui)
     implementation(libs.miuix.icons)
+    implementation(libs.miuix.preference)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.okhttp)
     implementation(libs.retrofit)
