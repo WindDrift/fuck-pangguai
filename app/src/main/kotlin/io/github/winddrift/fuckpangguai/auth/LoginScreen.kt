@@ -245,6 +245,7 @@ private fun SavedAccountRow(
     ) {
         AccountAvatar(
             name = displayName(account),
+            avatarUrl = account.avatarUrl,
             size = 40.dp,
         )
         Column(modifier = Modifier.weight(1f)) {
