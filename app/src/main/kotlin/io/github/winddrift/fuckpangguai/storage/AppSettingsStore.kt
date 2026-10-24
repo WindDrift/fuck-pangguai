@@ -6,10 +6,19 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.winddrift.fuckpangguai.BuildConfig
 import io.github.winddrift.fuckpangguai.storage.appDataStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+
+enum class AppThemeMode { System, Light, Dark }
+
+data class ThemeSettings(
+    val mode: AppThemeMode = AppThemeMode.System,
+    val dynamicColor: Boolean = false,
+)
 
 class AppSettingsStore(private val context: Context) : SettingsSource {
 
@@ -27,9 +36,28 @@ class AppSettingsStore(private val context: Context) : SettingsSource {
         context.appDataStore.edit { it[DRY_RUN] = enabled }
     }
 
+    val themeSettings: Flow<ThemeSettings> = context.appDataStore.data.map { preferences ->
+        ThemeSettings(
+            mode = preferences[THEME_MODE]
+                ?.let { stored -> AppThemeMode.entries.firstOrNull { it.name == stored } }
+                ?: AppThemeMode.System,
+            dynamicColor = preferences[DYNAMIC_COLOR] ?: false,
+        )
+    }
+
+    suspend fun setThemeMode(mode: AppThemeMode) {
+        context.appDataStore.edit { it[THEME_MODE] = mode.name }
+    }
+
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.appDataStore.edit { it[DYNAMIC_COLOR] = enabled }
+    }
+
     private companion object {
         val ONE_TAP = booleanPreferencesKey("one_tap_unlock")
         val DRY_RUN = booleanPreferencesKey("dry_run")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     }
 }
 
