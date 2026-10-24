@@ -78,14 +78,23 @@ private class QrAnalyzer(private val onQr: (String) -> Unit) : ImageAnalysis.Ana
     private val decoder = QrDecoder()
     private var lastText: String? = null
     private var lastAt = 0L
+    private var lastFallbackAt = 0L
 
     override fun analyze(image: ImageProxy) {
         try {
             val frame = image.toLumaFrame() ?: return
+            val now = System.currentTimeMillis()
             // 二维码检测与方向无关，不能旋转 PlanarYUVLuminanceSource：
             // ZXing 不支持该旋转操作，会抛异常导致所有竖屏帧被丢弃。
-            val text = decoder.decodeLuma(frame.data, frame.width, frame.height) ?: return
-            val now = System.currentTimeMillis()
+            val text = decoder.decodeLuma(frame.data, frame.width, frame.height)
+                ?: if (now - lastFallbackAt >= 300) {
+                    // 低对比度/圆点样式的码需要更重的预处理，限制在约 3fps 执行。
+                    lastFallbackAt = now
+                    decoder.decodeLumaPreprocessed(frame.data, frame.width, frame.height)
+                } else {
+                    null
+                }
+            if (text.isNullOrBlank()) return
             if (text != lastText || now - lastAt > 2_000) {
                 lastText = text
                 lastAt = now

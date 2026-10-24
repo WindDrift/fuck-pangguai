@@ -4,9 +4,12 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import com.google.zxing.qrcode.encoder.Encoder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import kotlin.math.roundToInt
 
 class QrDecoderTest {
 
@@ -79,6 +82,93 @@ class QrDecoderTest {
 
         assertNull(QrDecoder().decodePhotoArgb(blank, 200, 200))
     }
+
+    @Test
+    fun `decodes low contrast dotted qr through preprocessing`() {
+        val frame = dottedQrFrame(payload)
+
+        val decoded = QrDecoder().decodeLumaPreprocessed(
+            frame.pixels.toLuma(frame.width, frame.height),
+            frame.width,
+            frame.height,
+        )
+
+        assertEquals(payload, decoded)
+    }
+
+    @Test
+    fun `decodes low contrast dotted qr from album`() {
+        val frame = dottedQrFrame(payload)
+
+        val decoded = QrDecoder().decodePhotoArgb(frame.pixels, frame.width, frame.height)
+
+        assertEquals(payload, decoded)
+    }
+
+    /**
+     * 模拟设备上的圆点描边二维码：低对比蓝色、深色模块由带缝隙的圆点组成，
+     * 并轻微失焦。普通 ZXing 检测器很容易找不到这类码。
+     */
+    private fun dottedQrFrame(content: String, moduleSize: Int = 9): Frame {
+        val matrix = Encoder.encode(content, ErrorCorrectionLevel.L).matrix
+        val modules = matrix.width
+        val quiet = 4
+        val size = (modules + quiet * 2) * moduleSize
+        val background = rgb(150, 170, 225)
+        val foreground = rgb(75, 105, 185)
+        val pixels = IntArray(size * size) { background }
+        val radius = (moduleSize * 0.36f).roundToInt().coerceAtLeast(1)
+        val radiusSquared = radius * radius
+
+        for (moduleY in 0 until modules) {
+            for (moduleX in 0 until modules) {
+                if (matrix.get(moduleX, moduleY).toInt() != 1) continue
+                val centerX = (quiet + moduleX) * moduleSize + moduleSize / 2
+                val centerY = (quiet + moduleY) * moduleSize + moduleSize / 2
+                for (deltaY in -radius..radius) {
+                    for (deltaX in -radius..radius) {
+                        if (deltaX * deltaX + deltaY * deltaY > radiusSquared) continue
+                        val x = centerX + deltaX
+                        val y = centerY + deltaY
+                        if (x in 0 until size && y in 0 until size) {
+                            pixels[y * size + x] = foreground
+                        }
+                    }
+                }
+            }
+        }
+
+        blur(pixels, size, size)
+        return Frame(pixels, size, size)
+    }
+
+    private fun blur(pixels: IntArray, width: Int, height: Int) {
+        val source = pixels.copyOf()
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                var red = 0
+                var green = 0
+                var blue = 0
+                var count = 0
+                for (deltaY in -1..1) {
+                    for (deltaX in -1..1) {
+                        val sx = x + deltaX
+                        val sy = y + deltaY
+                        if (sx !in 0 until width || sy !in 0 until height) continue
+                        val pixel = source[sy * width + sx]
+                        red += (pixel shr 16) and 0xff
+                        green += (pixel shr 8) and 0xff
+                        blue += pixel and 0xff
+                        count++
+                    }
+                }
+                pixels[y * width + x] = rgb(red / count, green / count, blue / count)
+            }
+        }
+    }
+
+    private fun rgb(red: Int, green: Int, blue: Int): Int =
+        (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
 
     private fun qrMatrix(size: Int = 420): BitMatrix =
         QRCodeWriter().encode(
