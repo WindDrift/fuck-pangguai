@@ -156,7 +156,7 @@ fun AccountAssetCard(
 
             if (error != null) {
                 Text(
-                    text = if (snapshot != null) "刷新失败，显示上次数据：$error" else "刷新失败：$error",
+                    text = if (snapshot != null) "刷新失败，已保留可用数据：$error" else "刷新失败：$error",
                     style = MiuixTheme.textStyles.footnote1,
                     color = colors.error,
                 )
