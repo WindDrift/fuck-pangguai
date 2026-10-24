@@ -48,6 +48,7 @@ import io.github.winddrift.fuckpangguai.auth.LoginScreen
 import io.github.winddrift.fuckpangguai.confirm.ConfirmController
 import io.github.winddrift.fuckpangguai.confirm.ConfirmScreen
 import io.github.winddrift.fuckpangguai.confirm.ConfirmState
+import io.github.winddrift.fuckpangguai.confirm.LocationPhase
 import io.github.winddrift.fuckpangguai.debug.DebugScreen
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
@@ -416,6 +417,7 @@ fun PangguaiRoot(
                         RootBottomBar.Confirm -> ConfirmActionBar(
                             state = confirmState,
                             onUnlock = { confirmController?.unlock() },
+                            onRetryLocation = { confirmController?.retryLocation() },
                             onBack = { secondary = null },
                         )
                         is RootBottomBar.Navigation -> {
@@ -738,6 +740,7 @@ private fun MainNavigationBar(
 private fun ConfirmActionBar(
     state: ConfirmState,
     onUnlock: () -> Unit,
+    onRetryLocation: () -> Unit,
     onBack: () -> Unit,
 ) {
     BottomActionBar {
@@ -773,11 +776,23 @@ private fun ConfirmActionBar(
                             )
                         }
                         Button(
-                            onClick = onUnlock,
+                            onClick = if (ready.locationPhase == LocationPhase.Failed && !ready.dryRun) {
+                                onRetryLocation
+                            } else {
+                                onUnlock
+                            },
                             modifier = Modifier.fillMaxWidth(),
+                            enabled = ready.dryRun || ready.locationPhase != LocationPhase.Fetching,
                             colors = ButtonDefaults.buttonColorsPrimary(),
                         ) {
-                            Text(if (ready.dryRun) "演练解锁" else "开始使用")
+                            Text(
+                                when {
+                                    ready.dryRun -> "演练解锁"
+                                    ready.locationPhase == LocationPhase.Fetching -> "正在获取定位…"
+                                    ready.locationPhase == LocationPhase.Failed -> "重试定位"
+                                    else -> "开始使用"
+                                },
+                            )
                         }
                     }
 

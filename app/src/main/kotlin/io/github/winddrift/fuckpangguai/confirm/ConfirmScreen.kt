@@ -136,7 +136,14 @@ fun ConfirmScreen(
                         KeyValueRow("goodsId", info.goodsId)
                         KeyValueRow("套餐", "${info.skuName}（${info.skuId}）")
                         KeyValueRow("支付方式", info.channelName)
-                        KeyValueRow("lat/lng", "${info.lat}, ${info.lng}")
+                        KeyValueRow(
+                            "lat/lng",
+                            if (info.lat.isBlank() || info.lng.isBlank()) {
+                                "未获取"
+                            } else {
+                                "${info.lat}, ${info.lng}"
+                            },
+                        )
                         KeyValueRow("payType", info.payType.ifBlank { "空" })
                         Text(
                             "关闭演练模式后才能真实调用 water/unlock。",
@@ -162,7 +169,14 @@ fun ConfirmScreen(
 
                     item {
                         SectionCard(title = null) {
-                            KeyValueRow("定位", "已获取")
+                            KeyValueRow(
+                                label = "定位",
+                                value = when (ready.locationPhase) {
+                                    LocationPhase.Fetching -> "正在获取定位…"
+                                    LocationPhase.Ready -> "已获取"
+                                    LocationPhase.Failed -> "获取失败，可重试"
+                                },
+                            )
                             KeyValueRow(
                                 label = "一键解锁",
                                 value = if (ready.oneTap && ready.confirmed) {

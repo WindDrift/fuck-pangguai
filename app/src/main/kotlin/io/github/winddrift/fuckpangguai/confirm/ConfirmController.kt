@@ -4,6 +4,7 @@ import io.github.winddrift.fuckpangguai.core.AppConfig
 import io.github.winddrift.fuckpangguai.device.ChannelSelector
 import io.github.winddrift.fuckpangguai.device.DeviceDataSource
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
+import io.github.winddrift.fuckpangguai.location.GeoPoint
 import io.github.winddrift.fuckpangguai.location.LocationSource
 import io.github.winddrift.fuckpangguai.net.ApiException
 import io.github.winddrift.fuckpangguai.net.userMessage
@@ -15,7 +16,9 @@ import io.github.winddrift.fuckpangguai.storage.DeviceConfigSource
 import io.github.winddrift.fuckpangguai.storage.SettingsSource
 import io.github.winddrift.fuckpangguai.water.WaterDefaults
 import io.github.winddrift.fuckpangguai.water.WaterDataSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,13 +31,20 @@ data class LocationSnapshot(
     val lng: String,
 )
 
+enum class LocationPhase {
+    Fetching,
+    Ready,
+    Failed,
+}
+
 data class ConfirmReady(
     val device: ResolvedDevice,
     val skus: List<Sku>,
     val channels: List<PayChannelRoute>,
     val selectedSkuIndex: Int,
     val selectedChannelIndex: Int,
-    val location: LocationSnapshot,
+    val location: LocationSnapshot?,
+    val locationPhase: LocationPhase,
     val oneTap: Boolean,
     val dryRun: Boolean,
     val confirmed: Boolean,
@@ -85,10 +95,23 @@ class ConfirmController(
     val state = _state.asStateFlow()
 
     private var currentDevice: ResolvedDevice? = null
+    private var loadJob: Job? = null
+    private var locationJob: Job? = null
+    private var generation = 0
+    private var autoUnlockTriggered = false
+    private var locationSnapshot: LocationSnapshot? = null
+    private var locationPhase = LocationPhase.Fetching
 
     fun start(device: ResolvedDevice) {
+        val gen = ++generation
         currentDevice = device
-        scope.launch {
+        autoUnlockTriggered = false
+        locationSnapshot = null
+        locationPhase = LocationPhase.Fetching
+        loadJob?.cancel()
+        locationJob?.cancel()
+
+        loadJob = scope.launch {
             _state.value = ConfirmState.Loading
             try {
                 val detail = device.detail
@@ -107,61 +130,66 @@ class ConfirmController(
                     return@launch
                 }
 
-                val skus = deviceRepository.loadSkus(device.scan.id)
-                if (skus.isEmpty()) {
-                    _state.value = ConfirmState.Blocked("该设备没有可用套餐")
-                    return@launch
-                }
-                val channels = deviceRepository.loadChannels(detail)
-                if (channels.isEmpty()) {
-                    _state.value = ConfirmState.Blocked("该设备没有可用支付方式")
-                    return@launch
-                }
                 if (!locationProvider.hasPermission()) {
                     _state.value = ConfirmState.NeedsLocationPermission
                     return@launch
                 }
-                val location = locationProvider.getCurrentLocation()
-                if (location == null) {
-                    _state.value = ConfirmState.Blocked("无法获取当前位置，请开启定位后重试。")
+
+                launchLocation(device, gen)
+
+                val cached = deviceRepository.readCachedPlans(device)
+                if (gen != generation) return@launch
+                if (cached != null) {
+                    if (!publishReady(device, cached.skus, cached.channels, gen)) return@launch
+                    launchCacheRefresh(device)
                     return@launch
                 }
 
-                val snapshot = LocationSnapshot(
-                    lat = String.format(Locale.US, "%.6f", location.latitude),
-                    lng = String.format(Locale.US, "%.6f", location.longitude),
-                )
-                val oneTap = settingsStore.isOneTapEnabled()
-                val dryRun = settingsStore.isDryRun()
-                val confirmed = configStore.find(device.scan.id)
-                val skuIndex = confirmed?.skuId
-                    ?.let { id -> skus.indexOfFirst { it.skuId == id } }
-                    ?.takeIf { it >= 0 }
-                    ?: 0
-                val channelIndex = ChannelSelector.selectIndex(channels, confirmed?.channelMethod).coerceAtLeast(0)
-                val ready = ConfirmReady(
-                    device = device,
-                    skus = skus,
-                    channels = channels,
-                    selectedSkuIndex = skuIndex,
-                    selectedChannelIndex = channelIndex,
-                    location = snapshot,
-                    oneTap = oneTap,
-                    dryRun = dryRun,
-                    confirmed = confirmed != null,
-                )
-                _state.value = ConfirmState.Ready(ready)
-                if (oneTap && confirmed != null && !dryRun) {
-                    unlock()
+                val plans = deviceRepository.loadPlans(device)
+                if (gen != generation) return@launch
+                if (plans.skus.isEmpty()) {
+                    _state.value = ConfirmState.Blocked("该设备没有可用套餐")
+                    return@launch
                 }
+                if (plans.channels.isEmpty()) {
+                    _state.value = ConfirmState.Blocked("该设备没有可用支付方式")
+                    return@launch
+                }
+                publishReady(device, plans.skus, plans.channels, gen)
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (throwable: Throwable) {
-                _state.value = ConfirmState.Error(throwable.userMessage())
+                if (gen == generation) {
+                    _state.value = ConfirmState.Error(throwable.userMessage())
+                }
             }
         }
     }
 
     fun retryLocation() {
-        currentDevice?.let(::start)
+        val device = currentDevice ?: return
+        when (val state = _state.value) {
+            ConfirmState.NeedsLocationPermission -> {
+                if (locationProvider.hasPermission()) start(device)
+            }
+
+            is ConfirmState.Ready -> {
+                if (!locationProvider.hasPermission()) {
+                    _state.value = ConfirmState.NeedsLocationPermission
+                    return
+                }
+                if (state.value.locationPhase == LocationPhase.Fetching) return
+
+                locationSnapshot = null
+                locationPhase = LocationPhase.Fetching
+                _state.value = ConfirmState.Ready(
+                    state.value.copy(location = null, locationPhase = LocationPhase.Fetching),
+                )
+                launchLocation(device, generation)
+            }
+
+            else -> Unit
+        }
     }
 
     fun selectSku(index: Int) {
@@ -187,13 +215,16 @@ class ConfirmController(
                     skuId = ready.sku.skuId,
                     skuName = ready.sku.name,
                     channelName = ready.channel.methodName,
-                    lat = ready.location.lat,
-                    lng = ready.location.lng,
+                    lat = ready.location?.lat.orEmpty(),
+                    lng = ready.location?.lng.orEmpty(),
                     payType = payType,
                 ),
             )
             return
         }
+
+        val location = ready.location
+        if (ready.locationPhase != LocationPhase.Ready || location == null) return
 
         _state.value = ConfirmState.Unlocking
         scope.launch {
@@ -202,8 +233,8 @@ class ConfirmController(
                 val unlock = waterRepository.unlock(
                     detail = ready.device.detail,
                     skuId = ready.sku.skuId,
-                    lat = ready.location.lat,
-                    lng = ready.location.lng,
+                    lat = location.lat,
+                    lng = location.lng,
                     payType = payType,
                 )
                 waitForDevice(unlock)
@@ -222,14 +253,113 @@ class ConfirmController(
                         sku = ready.sku,
                         channel = ready.channel,
                         unlock = unlock,
-                        location = ready.location,
+                        location = location,
                     ),
                 )
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (throwable: Throwable) {
-                _state.value = ConfirmState.Error(throwable.userMessage())
+                val message = throwable.userMessage()
+                try {
+                    deviceRepository.clearCachedPlans(ready.device)
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (_: Throwable) {
+                }
+                _state.value = ConfirmState.Error(message)
             }
         }
     }
+
+    private fun launchLocation(device: ResolvedDevice, gen: Int) {
+        locationJob?.cancel()
+        locationJob = scope.launch {
+            val point = try {
+                locationProvider.getCurrentLocation()
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Throwable) {
+                null
+            }
+            if (gen != generation) return@launch
+
+            locationSnapshot = point?.let(::toSnapshot)
+            locationPhase = if (point == null) LocationPhase.Failed else LocationPhase.Ready
+
+            val ready = (_state.value as? ConfirmState.Ready)?.value ?: return@launch
+            if (ready.device != device) return@launch
+            _state.value = ConfirmState.Ready(
+                ready.copy(
+                    location = locationSnapshot,
+                    locationPhase = locationPhase,
+                ),
+            )
+            maybeAutoUnlock(device, gen)
+        }
+    }
+
+    private suspend fun publishReady(
+        device: ResolvedDevice,
+        skus: List<Sku>,
+        channels: List<PayChannelRoute>,
+        gen: Int,
+    ): Boolean {
+        if (gen != generation) return false
+
+        val oneTap = settingsStore.isOneTapEnabled()
+        val dryRun = settingsStore.isDryRun()
+        val confirmed = configStore.find(device.scan.id)
+        if (gen != generation) return false
+
+        val skuIndex = confirmed?.skuId
+            ?.let { id -> skus.indexOfFirst { it.skuId == id } }
+            ?.takeIf { it >= 0 }
+            ?: 0
+        val channelIndex = ChannelSelector.selectIndex(channels, confirmed?.channelMethod)
+            .coerceAtLeast(0)
+        val ready = ConfirmReady(
+            device = device,
+            skus = skus,
+            channels = channels,
+            selectedSkuIndex = skuIndex,
+            selectedChannelIndex = channelIndex,
+            location = locationSnapshot,
+            locationPhase = locationPhase,
+            oneTap = oneTap,
+            dryRun = dryRun,
+            confirmed = confirmed != null,
+        )
+        _state.value = ConfirmState.Ready(ready)
+        maybeAutoUnlock(device, gen)
+        return true
+    }
+
+    private fun launchCacheRefresh(device: ResolvedDevice) {
+        scope.launch {
+            try {
+                deviceRepository.refreshPlans(device)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private fun maybeAutoUnlock(device: ResolvedDevice, gen: Int) {
+        if (gen != generation || autoUnlockTriggered) return
+        val ready = (_state.value as? ConfirmState.Ready)?.value ?: return
+        if (ready.device != device) return
+        if (!ready.oneTap || !ready.confirmed || ready.dryRun) return
+        if (ready.locationPhase != LocationPhase.Ready) return
+
+        autoUnlockTriggered = true
+        unlock()
+    }
+
+    private fun toSnapshot(point: GeoPoint): LocationSnapshot = LocationSnapshot(
+        lat = String.format(Locale.US, "%.6f", point.latitude),
+        lng = String.format(Locale.US, "%.6f", point.longitude),
+    )
 
     private suspend fun waitForDevice(unlock: Unlock) {
         if (unlock.msgId.isBlank()) {
