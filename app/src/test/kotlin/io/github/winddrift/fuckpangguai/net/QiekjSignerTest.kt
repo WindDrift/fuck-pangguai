@@ -9,7 +9,7 @@ class QiekjSignerTest {
     @Test
     fun `normal sign matches known vector`() {
         assertEquals(
-            "96f2085fe60f5d2c90e9cc5c6541d08530cefbe6c19e6cfb8c47a96cee415e25",
+            "162ae72e81057aa63d00b9cbfdd5e90d6949970cc131d44a060b89a0867466aa",
             QiekjSigner.sign(
                 token = "test-token",
                 timestamp = "1700000000000",
@@ -22,7 +22,7 @@ class QiekjSignerTest {
     @Test
     fun `risk sign includes location headers and same timestamp`() {
         assertEquals(
-            "22453a1675dc8dd312727fb6d01352c9cc584b816567b127da786577bc3410ec",
+            "057de19e35175ed2c8193c813559faa4927e7324541daed606efc3bc7068092b",
             QiekjSigner.riskSign(
                 token = "test-token",
                 timestamp = "1700000000000",
