@@ -3,14 +3,17 @@ package io.github.winddrift.fuckpangguai.net
 import io.github.winddrift.fuckpangguai.net.dto.AfterPay
 import io.github.winddrift.fuckpangguai.net.dto.ApiResponse
 import io.github.winddrift.fuckpangguai.net.dto.GoodsDetail
+import io.github.winddrift.fuckpangguai.net.dto.IntegralTaskDto
 import io.github.winddrift.fuckpangguai.net.dto.ItemsList
 import io.github.winddrift.fuckpangguai.net.dto.LoginBean
 import io.github.winddrift.fuckpangguai.net.dto.MsgSyncBean
 import io.github.winddrift.fuckpangguai.net.dto.PayChannelRoute
 import io.github.winddrift.fuckpangguai.net.dto.ScanV2Bean
+import io.github.winddrift.fuckpangguai.net.dto.SignInActDto
 import io.github.winddrift.fuckpangguai.net.dto.Sku
 import io.github.winddrift.fuckpangguai.net.dto.Ticket
 import io.github.winddrift.fuckpangguai.net.dto.TicketLog
+import io.github.winddrift.fuckpangguai.net.dto.TodaySignInDto
 import io.github.winddrift.fuckpangguai.net.dto.Unlock
 import io.github.winddrift.fuckpangguai.net.dto.UserBalance
 import io.github.winddrift.fuckpangguai.net.dto.UserProfile
@@ -101,4 +104,32 @@ interface QiekjApi {
     @FormUrlEncoded
     @POST("tokenCoin/userTokenCoinLogs")
     suspend fun userTokenCoinLogs(@FieldMap body: Map<String, String>): ApiResponse<ItemsList<TicketLog>>
+
+    @FormUrlEncoded
+    @POST("signin/signInAcList")
+    suspend fun signInActList(@FieldMap body: Map<String, String>): ApiResponse<SignInActDto>
+
+    @FormUrlEncoded
+    @POST("signin/todaySignIn")
+    suspend fun todaySignIn(@FieldMap body: Map<String, String>): ApiResponse<TodaySignInDto>
+
+    @FormUrlEncoded
+    @POST("signin/doUserSignIn")
+    suspend fun doUserSignIn(@FieldMap body: Map<String, String>): ApiResponse<JsonElement>
+
+    @FormUrlEncoded
+    @POST("task/list")
+    suspend fun taskList(@FieldMap body: Map<String, String>): ApiResponse<ItemsList<IntegralTaskDto>>
+
+    @FormUrlEncoded
+    @POST("task/queryByType")
+    suspend fun taskQueryByType(@FieldMap body: Map<String, String>): ApiResponse<IntegralTaskDto>
+
+    @FormUrlEncoded
+    @POST("task/completed")
+    suspend fun taskCompleted(@FieldMap body: Map<String, String>): ApiResponse<JsonElement>
+
+    @FormUrlEncoded
+    @POST("integralCaptcha/isCaptcha")
+    suspend fun isCaptcha(@FieldMap body: Map<String, String>): ApiResponse<Boolean>
 }

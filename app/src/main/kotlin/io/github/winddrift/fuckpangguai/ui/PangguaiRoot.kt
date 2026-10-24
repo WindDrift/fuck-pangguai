@@ -53,6 +53,8 @@ import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import io.github.winddrift.fuckpangguai.history.HistoryScreen
 import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
+import io.github.winddrift.fuckpangguai.points.PointsController
+import io.github.winddrift.fuckpangguai.points.PointsScreen
 import io.github.winddrift.fuckpangguai.scan.ScanController
 import io.github.winddrift.fuckpangguai.scan.ScanScreen
 import io.github.winddrift.fuckpangguai.settings.SettingsScreen
@@ -101,6 +103,7 @@ fun PangguaiRoot(
     historyRepository: HistoryRepository,
     settingsStore: AppSettingsStore,
     assetController: AssetController,
+    pointsController: PointsController,
     nfcTagStore: NfcTagStore,
 ) {
     val context = LocalContext.current
@@ -130,6 +133,7 @@ fun PangguaiRoot(
     val confirmState by confirmStateFlow.collectAsStateWithLifecycle()
 
     val historyScrollBehavior = MiuixScrollBehavior()
+    val pointsScrollBehavior = MiuixScrollBehavior()
     val settingsScrollBehavior = MiuixScrollBehavior()
     val debugScrollBehavior = MiuixScrollBehavior()
     val density = LocalDensity.current
@@ -267,6 +271,7 @@ fun PangguaiRoot(
             RootDestination.Tickets(currentSecondary.shopId, currentSecondary.shopName)
 
         tab == MainTab.History -> RootDestination.History
+        tab == MainTab.Points -> RootDestination.Points
         tab == MainTab.Settings -> RootDestination.Settings
         else -> RootDestination.Scan
     }
@@ -275,6 +280,10 @@ fun PangguaiRoot(
         if (destination !is RootDestination.History) {
             historyScrollBehavior.state.heightOffset = 0f
             historyScrollBehavior.state.contentOffset = 0f
+        }
+        if (destination !is RootDestination.Points) {
+            pointsScrollBehavior.state.heightOffset = 0f
+            pointsScrollBehavior.state.contentOffset = 0f
         }
         if (destination !is RootDestination.Settings) {
             settingsScrollBehavior.state.heightOffset = 0f
@@ -294,6 +303,7 @@ fun PangguaiRoot(
         currentSecondary is SecondaryPage.AccountAccess -> RootTopBar.AccountAccess
         currentSecondary is SecondaryPage.Tickets -> RootTopBar.Tickets
         tab == MainTab.History -> RootTopBar.History
+        tab == MainTab.Points -> RootTopBar.Points
         tab == MainTab.Settings -> RootTopBar.Settings
         else -> RootTopBar.None
     }
@@ -372,6 +382,10 @@ fun PangguaiRoot(
                         RootTopBar.History -> AppTopBar(
                             "接水记录",
                             scrollBehavior = historyScrollBehavior,
+                        )
+                        RootTopBar.Points -> AppTopBar(
+                            "积分",
+                            scrollBehavior = pointsScrollBehavior,
                         )
                         RootTopBar.Settings -> AppTopBar(
                             "设置",
@@ -521,6 +535,13 @@ fun PangguaiRoot(
                             bottomContentPadding = floatingNavClearance,
                         )
 
+                        RootDestination.Points -> PointsScreen(
+                            controller = pointsController,
+                            account = activeAccount,
+                            scrollBehavior = pointsScrollBehavior,
+                            bottomContentPadding = floatingNavClearance,
+                        )
+
                         RootDestination.Settings -> SettingsScreen(
                             settingsStore = settingsStore,
                             historyRepository = historyRepository,
@@ -583,8 +604,11 @@ private sealed interface RootDestination {
     data object History : RootDestination {
         override val tabOrder: Int = 1
     }
-    data object Settings : RootDestination {
+    data object Points : RootDestination {
         override val tabOrder: Int = 2
+    }
+    data object Settings : RootDestination {
+        override val tabOrder: Int = 3
     }
     data object Debug : RootDestination
     data class AccountAccess(val target: AuthTarget) : RootDestination {
@@ -611,6 +635,7 @@ private sealed interface RootTopBar {
     data object AccountAccess : RootTopBar
     data object Tickets : RootTopBar
     data object History : RootTopBar
+    data object Points : RootTopBar
     data object Settings : RootTopBar
 }
 

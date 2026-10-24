@@ -13,6 +13,10 @@ import io.github.winddrift.fuckpangguai.net.SignInterceptor
 import io.github.winddrift.fuckpangguai.storage.DisclaimerStore
 import io.github.winddrift.fuckpangguai.device.DeviceRepository
 import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
+import io.github.winddrift.fuckpangguai.points.AccountStorePointsSource
+import io.github.winddrift.fuckpangguai.points.DataStorePointsRunStore
+import io.github.winddrift.fuckpangguai.points.PointsController
+import io.github.winddrift.fuckpangguai.points.QiekjPointsRepository
 import io.github.winddrift.fuckpangguai.scan.ScanController
 import io.github.winddrift.fuckpangguai.water.WaterRepository
 import io.github.winddrift.fuckpangguai.water.WaterSessionManager
@@ -25,6 +29,7 @@ import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import io.github.winddrift.fuckpangguai.core.AppConfig
 import io.github.winddrift.fuckpangguai.net.QiekjSigner
@@ -112,6 +117,18 @@ class AppGraph(context: Context) {
         assetRepository = assetRepository,
         snapshotStore = assetSnapshotStore,
         settingsStore = settingsStore,
+    )
+
+    val pointsController = PointsController(
+        scope = scope,
+        accountSource = AccountStorePointsSource(accountStore),
+        dataSource = QiekjPointsRepository(api, deviceId),
+        runStore = DataStorePointsRunStore(appContext),
+        settings = settingsStore,
+        notificationEnabled = {
+            NotificationManagerCompat.from(appContext).areNotificationsEnabled()
+        },
+        onPointsChanged = assetController::refresh,
     )
     val deviceConfigStore = DeviceConfigStore(appContext)
     val waterSessionStore = WaterSessionStore(appContext)

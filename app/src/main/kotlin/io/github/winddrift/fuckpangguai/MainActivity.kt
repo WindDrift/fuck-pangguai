@@ -16,6 +16,16 @@ import io.github.winddrift.fuckpangguai.ui.theme.PangguaiTheme
 import io.github.winddrift.fuckpangguai.ui.theme.resolveDark
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        (application as PangguaiApp).graph.pointsController.onAppForeground()
+    }
+
+    override fun onStop() {
+        (application as PangguaiApp).graph.pointsController.onAppBackground()
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -42,6 +52,7 @@ class MainActivity : ComponentActivity() {
                     historyRepository = graph.historyRepository,
                     settingsStore = graph.settingsStore,
                     assetController = graph.assetController,
+                    pointsController = graph.pointsController,
                     nfcTagStore = graph.nfcTagStore,
                 )
             }

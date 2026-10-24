@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.winddrift.fuckpangguai.BuildConfig
+import io.github.winddrift.fuckpangguai.points.PointsSettingsSource
 import io.github.winddrift.fuckpangguai.storage.appDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -21,7 +22,7 @@ data class ThemeSettings(
     val floatingNavBar: Boolean = false,
 )
 
-class AppSettingsStore(private val context: Context) : SettingsSource {
+class AppSettingsStore(private val context: Context) : SettingsSource, PointsSettingsSource {
 
     override suspend fun isOneTapEnabled(): Boolean =
         context.appDataStore.data.first()[ONE_TAP] ?: false
@@ -67,6 +68,38 @@ class AppSettingsStore(private val context: Context) : SettingsSource {
         context.appDataStore.edit { it[ASSETS_HIDDEN] = enabled }
     }
 
+    override val autoEnabled: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[POINTS_AUTO_ENABLED] ?: false
+    }
+
+    override val runOnLaunch: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[POINTS_RUN_ON_LAUNCH] ?: true
+    }
+
+    override val experimentEnabled: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[POINTS_EXPERIMENT_ENABLED] ?: false
+    }
+
+    override val riskAcknowledged: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[POINTS_RISK_ACKNOWLEDGED] ?: false
+    }
+
+    override suspend fun setAutoEnabled(enabled: Boolean) {
+        context.appDataStore.edit { it[POINTS_AUTO_ENABLED] = enabled }
+    }
+
+    override suspend fun setRunOnLaunch(enabled: Boolean) {
+        context.appDataStore.edit { it[POINTS_RUN_ON_LAUNCH] = enabled }
+    }
+
+    override suspend fun setExperimentEnabled(enabled: Boolean) {
+        context.appDataStore.edit { it[POINTS_EXPERIMENT_ENABLED] = enabled }
+    }
+
+    override suspend fun acknowledgeRisk() {
+        context.appDataStore.edit { it[POINTS_RISK_ACKNOWLEDGED] = true }
+    }
+
     private companion object {
         val ONE_TAP = booleanPreferencesKey("one_tap_unlock")
         val DRY_RUN = booleanPreferencesKey("dry_run")
@@ -74,6 +107,10 @@ class AppSettingsStore(private val context: Context) : SettingsSource {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val FLOATING_NAV_BAR = booleanPreferencesKey("floating_nav_bar")
         val ASSETS_HIDDEN = booleanPreferencesKey("assets_hidden")
+        val POINTS_AUTO_ENABLED = booleanPreferencesKey("points_auto_enabled")
+        val POINTS_RUN_ON_LAUNCH = booleanPreferencesKey("points_run_on_launch")
+        val POINTS_EXPERIMENT_ENABLED = booleanPreferencesKey("points_direct_task_experiment")
+        val POINTS_RISK_ACKNOWLEDGED = booleanPreferencesKey("points_risk_acknowledged")
     }
 }
 
