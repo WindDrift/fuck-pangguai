@@ -37,27 +37,30 @@ class AssetController(
     init {
         scope.launch {
             accountStore.activeAccount
-                .map { it?.localId }
+                .map { account -> account?.let { it.localId to it.invalid } }
                 .distinctUntilChanged()
-                .collect { localId ->
+                .collect { active ->
                     refreshJob?.cancel()
-                    if (localId == null) {
+                    if (active == null) {
                         _state.update {
                             AccountAssetState(hidden = it.hidden)
                         }
                         return@collect
                     }
+                    val (localId, invalid) = active
                     _state.update {
                         it.copy(
                             accountId = localId,
                             snapshot = null,
-                            loading = true,
+                            loading = !invalid,
                             error = null,
                         )
                     }
                     val snapshot = snapshotStore.load(localId)
-                    _state.update { it.copy(snapshot = snapshot) }
-                    refresh()
+                    _state.update {
+                        it.copy(snapshot = snapshot, loading = false)
+                    }
+                    if (!invalid) refresh()
                 }
         }
         scope.launch {
