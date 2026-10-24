@@ -25,7 +25,7 @@ export JAVA_HOME=/c/Users/*****/.gradle/jdks/jetbrains_s_r_o_-21-amd64-windows.2
 ./gradlew :app:assembleRelease
 ```
 
-Miuix 使用 `0.9.2`。当前构建从 Maven Central 解析；如果坚持 GitHub Packages，需在 `settings.gradle.kts` 添加 GPR 仓库并在 `~/.gradle/gradle.properties` 配置 `gpr.user` / `gpr.key`（`read:packages`）。
+Miuix 使用 `0.9.4`。当前构建从 Maven Central 解析；如果坚持 GitHub Packages，需在 `settings.gradle.kts` 添加 GPR 仓库并在 `~/.gradle/gradle.properties` 配置 `gpr.user` / `gpr.key`（`read:packages`）。
 
 ## 签名与发布
 
@@ -57,8 +57,8 @@ export JAVA_HOME=/c/Users/*****/.gradle/jdks/jetbrains_s_r_o_-21-amd64-windows.2
 推送 `v*` 标签会触发 [`.github/workflows/release.yml`](.github/workflows/release.yml)：解码密钥、构建签名 APK、用 `apksigner` 校验、上传 artifact，并创建附带 APK 与 `mapping.txt` 的 GitHub Release。也可在 Actions 页手动触发，此时只上传 artifact，不创建 Release。
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 > 当前仓库尚未配置远程地址；添加 GitHub 远程并推送后才能使用 Actions。
