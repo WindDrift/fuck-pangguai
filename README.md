@@ -4,14 +4,14 @@
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-12%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/12)
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/WindDrift/fuck-pangguai/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/WindDrift/fuck-pangguai/releases)
 
 > [!WARNING]
 > 本项目与胖乖生活、学校及设备运营方均无关联。它直接调用官方接口完成扫码、解锁和支付状态查询，不绕过定位、实名或风控校验，使用风险由使用者承担。
 >
 > 仓库不提供官方客户端凭据。未配置凭据时应用可以编译，但登录和扫码等联网功能不可用。
 
-当前 1.2.0：核心扫码、解锁、接水与结算链路已在真机验证；BLE 与自动扣款仍有明确限制。
+当前 1.3.0：新增本地多账号、账号资产、通用小票明细与流水，接水历史按账号隔离；核心扫码、解锁、接水与结算链路已在真机验证，BLE 与自动扣款仍有明确限制。
 
 ## 功能
 
