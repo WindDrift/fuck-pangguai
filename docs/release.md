@@ -65,7 +65,7 @@
 1. 校验并解码签名与 API 凭据。
 2. 构建签名 Release APK。
 3. 使用 `apksigner` 校验签名。
-4. 上传 APK 与 `mapping.txt` 构建产物。
+4. 将 APK 命名为 `fuck-pangguai-<versionName>.apk`，上传同名（去掉 `.apk`）的 artifact，内含 APK 与 `mapping.txt`。
 5. 标签触发时创建 GitHub Release；手动触发只上传 artifact。
 
 ## 创建发布

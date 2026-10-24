@@ -80,16 +80,20 @@ jobs:
         run: |
           VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -n 1)
           test -n "$VERSION_NAME"
+          APK_NAME="fuck-pangguai-${VERSION_NAME}.apk"
+          ARTIFACT_NAME="fuck-pangguai-${VERSION_NAME}"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          cp app/build/outputs/apk/release/app-release.apk "fuck-pangguai-${VERSION_NAME}.apk"
+          echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
+          cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
+          name: ${{ env.ARTIFACT_NAME }}
           if-no-files-found: error
           path: |
-            fuck-pangguai-*.apk
+            ${{ env.APK_NAME }}
             app/build/outputs/mapping/release/mapping.txt
 
       - name: Create GitHub Release
@@ -97,7 +101,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          assets=("fuck-pangguai-${VERSION_NAME}.apk")
+          assets=("$APK_NAME")
           mapping=app/build/outputs/mapping/release/mapping.txt
           if [ -f "$mapping" ]; then
             assets+=("$mapping")
