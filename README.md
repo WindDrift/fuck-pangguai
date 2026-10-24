@@ -27,12 +27,41 @@ export JAVA_HOME=/c/Users/*****/.gradle/jdks/jetbrains_s_r_o_-21-amd64-windows.2
 
 Miuix 使用 `0.9.2`。当前构建从 Maven Central 解析；如果坚持 GitHub Packages，需在 `settings.gradle.kts` 添加 GPR 仓库并在 `~/.gradle/gradle.properties` 配置 `gpr.user` / `gpr.key`（`read:packages`）。
 
-## 签名
+## 签名与发布
 
-1. 复制 `keystore.properties.example` 为 `keystore.properties`。
-2. 填入 `storeFile/storePassword/keyAlias/keyPassword`。
-3. 执行 `./gradlew :app:assembleRelease`，输出签名 APK。
-4. `keystore.properties` 与 keystore 已被 `.gitignore` 排除，不要提交。
+Release 签名优先读取根目录 `keystore.properties`，文件不存在时回退到环境变量，便于 CI 注入。四项缺一不可；未配置或配置不全时仍可构建，但产物为未签名包。
+
+### 本地
+
+本仓库已生成 `keystore/release.jks` 与 `keystore.properties`，两者均被 `.gitignore` 排除。**请立即备份这两个文件及密码**：密钥丢失后无法再覆盖安装或升级已发布版本。
+
+```bash
+export JAVA_HOME=/c/Users/*****/.gradle/jdks/jetbrains_s_r_o_-21-amd64-windows.2
+./gradlew :app:assembleRelease
+# 输出：app/build/outputs/apk/release/app-release.apk
+```
+
+`storeFile` 可写相对仓库根目录的路径或绝对路径。换机器时复制 `keystore/` 与 `keystore.properties`，或改用下面四个环境变量。
+
+### GitHub Actions
+
+在仓库 Settings → Secrets and variables → Actions 中添加：
+
+| Secret | 内容 |
+| --- | --- |
+| `RELEASE_KEYSTORE_BASE64` | `base64 -w0 keystore/release.jks` 的完整输出 |
+| `RELEASE_STORE_PASSWORD` | `keystore.properties` 中的 `storePassword` |
+| `RELEASE_KEY_ALIAS` | `keystore.properties` 中的 `keyAlias`（当前为 `release`） |
+| `RELEASE_KEY_PASSWORD` | `keystore.properties` 中的 `keyPassword` |
+
+推送 `v*` 标签会触发 [`.github/workflows/release.yml`](.github/workflows/release.yml)：解码密钥、构建签名 APK、用 `apksigner` 校验、上传 artifact，并创建附带 APK 与 `mapping.txt` 的 GitHub Release。也可在 Actions 页手动触发，此时只上传 artifact，不创建 Release。
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+> 当前仓库尚未配置远程地址；添加 GitHub 远程并推送后才能使用 Actions。
 
 未配置签名时，release 产物为 `app-release-unsigned.apk`。
 
