@@ -113,7 +113,10 @@ fun ScanScreen(
             ) {
                 if (hasCameraPermission) {
                     QrCameraPreview(
-                        onQr = controller::onQr,
+                        onQr = { raw ->
+                            // 已经拿到结果/正在解析时不再重复触发，避免同一张码反复请求。
+                            if (state is ScanState.Idle) controller.onQr(raw)
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                     Text(
