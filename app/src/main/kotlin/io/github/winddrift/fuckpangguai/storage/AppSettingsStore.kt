@@ -38,6 +38,14 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
         context.appDataStore.edit { it[DRY_RUN] = enabled }
     }
 
+    val skipDeviceInfo: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[SKIP_DEVICE_INFO] ?: false
+    }
+
+    suspend fun setSkipDeviceInfo(enabled: Boolean) {
+        context.appDataStore.edit { it[SKIP_DEVICE_INFO] = enabled }
+    }
+
     val themeSettings: Flow<ThemeSettings> = context.appDataStore.data.map { preferences ->
         ThemeSettings(
             mode = preferences[THEME_MODE]
@@ -102,6 +110,7 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
 
     private companion object {
         val ONE_TAP = booleanPreferencesKey("one_tap_unlock")
+        val SKIP_DEVICE_INFO = booleanPreferencesKey("skip_device_info")
         val DRY_RUN = booleanPreferencesKey("dry_run")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")

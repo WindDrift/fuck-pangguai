@@ -86,6 +86,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun ScanScreen(
     controller: ScanController,
     onDeviceReady: (ResolvedDevice) -> Unit,
+    skipDeviceInfo: Boolean = false,
     bottomContentPadding: Dp = 0.dp,
     onWarmUpLocation: () -> Unit = {},
 ) {
@@ -150,6 +151,14 @@ fun ScanScreen(
         if (state is ScanState.Resolving) {
             view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
+    }
+
+    LaunchedEffect(state, skipDeviceInfo) {
+        val ready = state as? ScanState.DeviceReady ?: return@LaunchedEffect
+        if (!skipDeviceInfo) return@LaunchedEffect
+        // 先清空扫码状态，避免从确认页返回时再次自动跳转。
+        controller.reset()
+        onDeviceReady(ready.device)
     }
 
     val galleryLauncher = rememberLauncherForActivityResult(

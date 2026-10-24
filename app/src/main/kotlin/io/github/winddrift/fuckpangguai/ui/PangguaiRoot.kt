@@ -120,6 +120,8 @@ fun PangguaiRoot(
     val activeSession by waterSessionManager.session.collectAsStateWithLifecycle()
     val themeSettings by settingsStore.themeSettings
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
+    val skipDeviceInfo by settingsStore.skipDeviceInfo
+        .collectAsStateWithLifecycle(initialValue = false)
 
     var tab by rememberSaveable { mutableStateOf(MainTab.Scan) }
     var secondary by remember { mutableStateOf<SecondaryPage?>(null) }
@@ -572,6 +574,7 @@ fun PangguaiRoot(
                         RootDestination.Scan -> ScanScreen(
                             controller = scanController,
                             onDeviceReady = { secondary = SecondaryPage.Confirm(it) },
+                            skipDeviceInfo = skipDeviceInfo,
                             bottomContentPadding = floatingNavClearance,
                             onWarmUpLocation = onWarmUpLocation,
                         )

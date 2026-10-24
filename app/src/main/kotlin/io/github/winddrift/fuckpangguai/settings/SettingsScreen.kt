@@ -74,6 +74,8 @@ fun SettingsScreen(
     val colors = MiuixTheme.colorScheme
     val themeSettings by settingsStore.themeSettings
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
+    val skipDeviceInfo by settingsStore.skipDeviceInfo
+        .collectAsStateWithLifecycle(initialValue = false)
     val assetState by assetController.state.collectAsStateWithLifecycle()
     val assetMatchesActive = assetState.accountId == activeAccount?.localId
     var showSwitchSheet by remember { mutableStateOf(false) }
@@ -215,6 +217,15 @@ fun SettingsScreen(
                     },
                     title = "一键解锁",
                     summary = "同一设备首次确认后，后续扫码直接解锁",
+                )
+                PreferenceDivider()
+                SwitchPreference(
+                    checked = skipDeviceInfo,
+                    onCheckedChange = { enabled ->
+                        scope.launch { settingsStore.setSkipDeviceInfo(enabled) }
+                    },
+                    title = "跳过设备信息",
+                    summary = "识别成功后直接进入确认设备页，可配合一键解锁实现扫码即开",
                 )
                 PreferenceDivider()
                 SwitchPreference(

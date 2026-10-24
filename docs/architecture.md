@@ -117,7 +117,7 @@ flowchart LR
 | 账号资料 | DataStore | `localId`、服务端 ID、昵称/别名、头像 URL、脱敏手机号、加密完整手机号、失效标记 |
 | 当前账号 | DataStore | `active_account_id`，决定请求使用的 token 与历史归属 |
 | 资产快照 | DataStore | 每个账号一份资料/余额/小票汇总，刷新失败时兜底 |
-| 主题、动态取色、悬浮底栏、演练模式、一键解锁、资产隐藏 | DataStore Preferences | 本机设置 |
+| 主题、动态取色、悬浮底栏、演练模式、一键解锁、跳过设备信息、资产隐藏 | DataStore Preferences | 本机设置 |
 | 当前接水会话 | DataStore Preferences | JSON 序列化，带创建时的账号 `localId`，供前台服务恢复 |
 | 套餐与支付方式缓存 | DataStore Preferences（独立 `plan_cache` 文件） | 按设备与账号 `localId` 缓存；最长 7 天、最多 50 条，超出淘汰最旧；命中先展示、后台刷新 |
 | NFC 标签映射 | DataStore Preferences | 标签 ID → SN、设备名、商品 ID |
