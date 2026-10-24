@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.winddrift.fuckpangguai.account.AssetSnapshot
 import io.github.winddrift.fuckpangguai.account.StoredAccount
@@ -18,8 +19,15 @@ import io.github.winddrift.fuckpangguai.account.formatIntegral
 import io.github.winddrift.fuckpangguai.account.pointsToYuan
 import io.github.winddrift.fuckpangguai.ui.components.AccountAvatar
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Hide
+import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.Replace
+import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -32,7 +40,6 @@ fun AccountAssetCard(
     onRefresh: () -> Unit,
     onToggleHidden: () -> Unit,
     onSwitchAccount: () -> Unit,
-    onOpenTickets: () -> Unit,
     onReauth: (() -> Unit)?,
 ) {
     val colors = MiuixTheme.colorScheme
@@ -83,16 +90,36 @@ fun AccountAssetCard(
                         color = colors.onSurfaceSecondary,
                     )
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    TextButton(
-                        text = "刷新",
-                        onClick = onRefresh,
-                        enabled = !loading,
-                    )
-                    TextButton(
-                        text = if (hidden) "显示" else "隐藏",
+                Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                    IconButton(
+                        onClick = {
+                            if (!loading && !account.invalid) onRefresh()
+                        },
+                        backgroundColor = Color.Transparent,
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Refresh,
+                            contentDescription = "刷新账号资产",
+                        )
+                    }
+                    IconButton(
                         onClick = onToggleHidden,
-                    )
+                        backgroundColor = Color.Transparent,
+                    ) {
+                        Icon(
+                            imageVector = if (hidden) MiuixIcons.Show else MiuixIcons.Hide,
+                            contentDescription = if (hidden) "显示资产" else "隐藏资产",
+                        )
+                    }
+                    IconButton(
+                        onClick = onSwitchAccount,
+                        backgroundColor = Color.Transparent,
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Replace,
+                            contentDescription = "切换账号",
+                        )
+                    }
                 }
             }
 
@@ -160,16 +187,6 @@ fun AccountAssetCard(
                     style = MiuixTheme.textStyles.footnote1,
                     color = colors.error,
                 )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                if (snapshot != null && (snapshot.tickets.isNotEmpty() || snapshot.tokenCoin > 0)) {
-                    TextButton(text = "小票明细", onClick = onOpenTickets)
-                }
-                TextButton(text = "切换账号", onClick = onSwitchAccount)
             }
         }
     }

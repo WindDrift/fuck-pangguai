@@ -56,6 +56,7 @@ import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
 import io.github.winddrift.fuckpangguai.scan.ScanController
 import io.github.winddrift.fuckpangguai.scan.ScanScreen
 import io.github.winddrift.fuckpangguai.settings.SettingsScreen
+import io.github.winddrift.fuckpangguai.settings.TicketsScreen
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
 import io.github.winddrift.fuckpangguai.storage.ThemeSettings
 import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
@@ -220,6 +221,21 @@ fun PangguaiRoot(
         }
     }
 
+    fun closeSecondary() {
+        when (val page = secondary) {
+            is SecondaryPage.Tickets -> {
+                secondary = if (page.shopId.isBlank()) null else SecondaryPage.Tickets()
+            }
+
+            is SecondaryPage.AccountAccess -> {
+                controller.cancelAuth()
+                secondary = null
+            }
+
+            else -> secondary = null
+        }
+    }
+
     BackHandler(
         enabled = activeSession != null ||
             secondary != null ||
@@ -227,11 +243,7 @@ fun PangguaiRoot(
     ) {
         when {
             activeSession != null -> requestUsingExit()
-            secondary != null -> {
-                if (secondary is SecondaryPage.AccountAccess) controller.cancelAuth()
-                secondary = null
-            }
-
+            secondary != null -> closeSecondary()
             tab != MainTab.Scan -> tab = MainTab.Scan
         }
     }
@@ -250,6 +262,9 @@ fun PangguaiRoot(
         currentSecondary is SecondaryPage.Debug -> RootDestination.Debug
         currentSecondary is SecondaryPage.AccountAccess ->
             RootDestination.AccountAccess(currentSecondary.target)
+
+        currentSecondary is SecondaryPage.Tickets ->
+            RootDestination.Tickets(currentSecondary.shopId, currentSecondary.shopName)
 
         tab == MainTab.History -> RootDestination.History
         tab == MainTab.Settings -> RootDestination.Settings
@@ -277,6 +292,7 @@ fun PangguaiRoot(
         currentSecondary is SecondaryPage.Confirm -> RootTopBar.Confirm
         currentSecondary is SecondaryPage.Debug -> RootTopBar.Debug
         currentSecondary is SecondaryPage.AccountAccess -> RootTopBar.AccountAccess
+        currentSecondary is SecondaryPage.Tickets -> RootTopBar.Tickets
         tab == MainTab.History -> RootTopBar.History
         tab == MainTab.Settings -> RootTopBar.Settings
         else -> RootTopBar.None
@@ -294,6 +310,11 @@ fun PangguaiRoot(
         is AuthTarget.Reauth -> "重新登录"
         AuthTarget.None -> "登录"
     }
+    val ticketTitle = (currentSecondary as? SecondaryPage.Tickets)
+        ?.takeIf { it.shopId.isNotBlank() }
+        ?.shopName
+        ?.ifBlank { "小票流水" }
+        ?: "通用小票"
     val floatingNavVisible = (bottomBarKind as? RootBottomBar.Navigation)?.floating == true
     val floatingNavClearance = if (floatingNavVisible && floatingNavHeightPx > 0) {
         // Miuix 将 floatingToolbar 放在距屏幕底部 4dp 的位置。
@@ -333,18 +354,19 @@ fun PangguaiRoot(
                     when (bar) {
                         RootTopBar.None -> Unit
                         RootTopBar.Using -> AppTopBar("接水状态", onBack = ::requestUsingExit)
-                        RootTopBar.Confirm -> AppTopBar("确认设备", onBack = { secondary = null })
+                        RootTopBar.Confirm -> AppTopBar("确认设备", onBack = ::closeSecondary)
                         RootTopBar.Debug -> AppTopBar(
                             "诊断",
-                            onBack = { secondary = null },
+                            onBack = ::closeSecondary,
                             scrollBehavior = debugScrollBehavior,
                         )
                         RootTopBar.AccountAccess -> AppTopBar(
                             accountAccessTitle,
-                            onBack = {
-                                controller.cancelAuth()
-                                secondary = null
-                            },
+                            onBack = ::closeSecondary,
+                        )
+                        RootTopBar.Tickets -> AppTopBar(
+                            ticketTitle,
+                            onBack = ::closeSecondary,
                         )
 
                         RootTopBar.History -> AppTopBar(
@@ -449,6 +471,14 @@ fun PangguaiRoot(
                             },
                         )
 
+                        is RootDestination.Tickets -> TicketsScreen(
+                            assetController = assetController,
+                            shopId = dest.shopId,
+                            onSelectShop = { ticket ->
+                                secondary = SecondaryPage.Tickets(ticket.shopId, ticket.shopName)
+                            },
+                        )
+
                         is RootDestination.AccountAccess -> LoginScreen(
                             busy = busy,
                             codeSent = codeSent,
@@ -498,6 +528,7 @@ fun PangguaiRoot(
                             accounts = accounts,
                             activeAccount = activeAccount,
                             onOpenDebug = { secondary = SecondaryPage.Debug },
+                            onOpenTickets = { secondary = SecondaryPage.Tickets() },
                             onAddAccount = {
                                 controller.beginAddAccount()
                                 secondary = SecondaryPage.AccountAccess(AuthTarget.AddAccount)
@@ -560,6 +591,10 @@ private sealed interface RootDestination {
         override val contentKey: Any = "AccountAccess"
     }
 
+    data class Tickets(val shopId: String, val shopName: String) : RootDestination {
+        override val contentKey: Any = "Tickets-$shopId"
+    }
+
     data class Confirm(val device: ResolvedDevice, val state: ConfirmState) : RootDestination {
         override val contentKey: Any = "Confirm"
     }
@@ -574,6 +609,7 @@ private sealed interface RootTopBar {
     data object Confirm : RootTopBar
     data object Debug : RootTopBar
     data object AccountAccess : RootTopBar
+    data object Tickets : RootTopBar
     data object History : RootTopBar
     data object Settings : RootTopBar
 }
@@ -600,16 +636,28 @@ private fun rootTransition(
         return (fadeIn(PageFadeSpec) + slideInVertically(PageSlideSpec) { it / 5 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutVertically(PageSlideSpec) { -it / 8 })
     }
+    if (initial is RootDestination.Tickets && target is RootDestination.Tickets) {
+        val forward = initial.shopId.isBlank() && target.shopId.isNotBlank()
+        return if (forward) {
+            (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { it / 4 }) togetherWith
+                (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { -it / 10 })
+        } else {
+            (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { -it / 10 }) togetherWith
+                (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { it / 4 })
+        }
+    }
     if (target is RootDestination.Confirm ||
         target is RootDestination.Debug ||
-        target is RootDestination.AccountAccess
+        target is RootDestination.AccountAccess ||
+        target is RootDestination.Tickets
     ) {
         return (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { it / 4 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { -it / 10 })
     }
     if (initial is RootDestination.Confirm ||
         initial is RootDestination.Debug ||
-        initial is RootDestination.AccountAccess
+        initial is RootDestination.AccountAccess ||
+        initial is RootDestination.Tickets
     ) {
         return (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { -it / 10 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { it / 4 })

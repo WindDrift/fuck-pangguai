@@ -43,6 +43,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Promotions
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
@@ -57,6 +58,7 @@ fun SettingsScreen(
     accounts: List<StoredAccount>,
     activeAccount: StoredAccount?,
     onOpenDebug: () -> Unit,
+    onOpenTickets: () -> Unit,
     onAddAccount: () -> Unit,
     onSwitchAccount: (String) -> Unit,
     onReauthAccount: (String) -> Unit,
@@ -75,7 +77,6 @@ fun SettingsScreen(
     val assetState by assetController.state.collectAsStateWithLifecycle()
     val assetMatchesActive = assetState.accountId == activeAccount?.localId
     var showSwitchSheet by remember { mutableStateOf(false) }
-    var showTicketSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         assetController.refresh()
@@ -157,7 +158,6 @@ fun SettingsScreen(
                 onRefresh = assetController::refresh,
                 onToggleHidden = assetController::toggleHidden,
                 onSwitchAccount = { showSwitchSheet = true },
-                onOpenTickets = { showTicketSheet = true },
                 onReauth = activeAccount?.let { account ->
                     { onReauthAccount(account.localId) }
                 },
@@ -262,6 +262,19 @@ fun SettingsScreen(
         item {
             PreferenceGroup(title = "账号") {
                 ArrowPreference(
+                    title = "通用小票明细",
+                    summary = "按店铺查看通用小票，点进店铺查看流水",
+                    startAction = {
+                        Icon(
+                            imageVector = MiuixIcons.Promotions,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    },
+                    onClick = onOpenTickets,
+                )
+                PreferenceDivider()
+                ArrowPreference(
                     title = "添加账号",
                     summary = "登录另一个胖乖生活账号，当前账号会保留",
                     onClick = onAddAccount,
@@ -339,13 +352,5 @@ fun SettingsScreen(
         onReauth = onReauthAccount,
         onRename = onRenameAccount,
         onDelete = onDeleteAccount,
-    )
-
-    TicketAssetSheet(
-        show = showTicketSheet,
-        tickets = assetState.snapshot?.tickets.orEmpty(),
-        ticketsComplete = assetState.snapshot?.ticketsComplete ?: true,
-        loadLogs = assetController::loadLogs,
-        onDismiss = { showTicketSheet = false },
     )
 }
