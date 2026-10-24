@@ -4,14 +4,14 @@
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-12%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/12)
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/WindDrift/fuck-pangguai/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/WindDrift/fuck-pangguai/releases)
 
 > [!WARNING]
 > 本项目与胖乖生活、学校及设备运营方均无关联。它直接调用官方接口完成扫码、解锁和支付状态查询，不绕过定位、实名或风控校验，使用风险由使用者承担。
 >
 > 仓库不提供官方客户端凭据。未配置凭据时应用可以编译，但登录和扫码等联网功能不可用。
 
-当前 1.1.0：核心扫码、解锁、接水与结算链路已在真机验证；BLE 与自动扣款仍有明确限制。
+当前 1.2.0：核心扫码、解锁、接水与结算链路已在真机验证；BLE 与自动扣款仍有明确限制。
 
 ## 功能
 
@@ -19,8 +19,8 @@
 - 手机号 + 验证码登录，登录凭证保存在本机并使用 Android Keystore 加密。
 - 确认页展示设备信息、套餐与支付通道，支持演练模式和二次确认后的一键解锁。
 - 前台服务持续同步接水状态、设备结算与支付结果，切到后台也能收到本地通知。
-- 接水历史仅保存在本机，支持查看、删除和导出 UTF-8 CSV。
-- Miuix 界面，支持跟随系统深浅色与 Monet 动态取色。
+- 接水历史仅保存在本机，支持查看和删除；CSV 导出与清空在设置页。
+- Miuix 界面，原生页面转场与组件动效，支持深浅色、Monet 动态取色和可切换的悬浮底栏。
 - 无广告、无第三方统计、无推送 SDK、无 IM；接水状态只使用本地前台服务通知。
 
 ## 下载与安装
