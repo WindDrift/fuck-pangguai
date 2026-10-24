@@ -33,15 +33,17 @@ jobs:
       - name: Install SDK packages
         run: sdkmanager --install "platforms;android-37" "build-tools;37.0.0"
 
-      - name: Validate signing secrets
+      - name: Validate release secrets
         env:
           KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          APP_SECRET: ${{ secrets.QIEKJ_APP_SECRET }}
+          LOCATION_SECRET: ${{ secrets.QIEKJ_LOCATION_SECRET }}
         run: |
           missing=0
-          for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+          for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD APP_SECRET LOCATION_SECRET; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing repository secret: $name"
               missing=1
@@ -62,6 +64,8 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          QIEKJ_APP_SECRET: ${{ secrets.QIEKJ_APP_SECRET }}
+          QIEKJ_LOCATION_SECRET: ${{ secrets.QIEKJ_LOCATION_SECRET }}
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature

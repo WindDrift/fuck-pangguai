@@ -10,8 +10,9 @@ object QiekjSigner {
         timestamp: String,
         encodedPath: String,
         versionName: String = AppConfig.QIEKJ_VERSION_NAME,
+        appSecret: String = AppConfig.APP_SECRET,
     ): String = sha256Hex(
-        "appSecret=${AppConfig.APP_SECRET}" +
+        "appSecret=$appSecret" +
             "&channel=${AppConfig.CHANNEL}" +
             "&timestamp=$timestamp" +
             "&token=$token" +
@@ -28,8 +29,9 @@ object QiekjSigner {
         lat: String,
         lng: String,
         versionName: String = AppConfig.QIEKJ_VERSION_NAME,
+        locationSecret: String = AppConfig.LOCATION_SECRET,
     ): String = sha256Hex(
-        "appSecret=${AppConfig.LOCATION_SECRET}" +
+        "appSecret=$locationSecret" +
             "&categoryCode=$categoryCode" +
             "&channel=${AppConfig.CHANNEL}" +
             "&imei=$imei" +

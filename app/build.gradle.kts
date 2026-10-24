@@ -14,6 +14,27 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// API credentials are kept out of the public source tree. Local builds read
+// secrets.properties; CI injects the same values as environment variables.
+val secretsPropertiesFile = rootProject.file("secrets.properties")
+val secretsProperties = Properties().apply {
+    if (secretsPropertiesFile.exists()) {
+        secretsPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun secretValue(propertyName: String, envName: String): String =
+    secretsProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(envName).orNull?.takeIf { it.isNotBlank() }
+        ?: ""
+
+val qiekjAppSecret = secretValue("appSecret", "QIEKJ_APP_SECRET")
+val qiekjLocationSecret = secretValue("locationSecret", "QIEKJ_LOCATION_SECRET")
+    .ifBlank { qiekjAppSecret }
+
+fun buildConfigString(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 // Local builds read keystore.properties; CI injects the same values as env vars.
 fun signingValue(propertyName: String, envName: String): String? =
     keystoreProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
@@ -45,6 +66,9 @@ android {
         targetSdk = 37
         versionCode = 2
         versionName = "1.0.0-1b19ef7"
+
+        buildConfigField("String", "QIEKJ_APP_SECRET", buildConfigString(qiekjAppSecret))
+        buildConfigField("String", "QIEKJ_LOCATION_SECRET", buildConfigString(qiekjLocationSecret))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
