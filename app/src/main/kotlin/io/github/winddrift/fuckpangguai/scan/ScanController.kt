@@ -13,9 +13,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+enum class ScanSource {
+    Qr,
+    Nfc,
+}
+
 sealed interface ScanState {
     data object Idle : ScanState
-    data object Loading : ScanState
+
+    /** 已经识别到输入、正在向服务端解析设备；界面需要在识别瞬间给出明确反馈。 */
+    data class Resolving(val source: ScanSource) : ScanState
+
     data class DeviceReady(val device: ResolvedDevice) : ScanState
     data class NeedsBind(
         val tagId: String,
@@ -50,11 +58,12 @@ class ScanController(
     private val _state = MutableStateFlow<ScanState>(ScanState.Idle)
     val state = _state.asStateFlow()
 
+    @Volatile
     private var pendingTagId: String? = null
 
     fun onQr(raw: String) {
         when (val target = QrParser.parse(raw)) {
-            is QrTarget.Device -> resolve(target.key, target.value, pendingTagId)
+            is QrTarget.Device -> resolve(target.key, target.value, pendingTagId, ScanSource.Qr)
             is QrTarget.Unsupported -> {
                 _state.value = ScanState.Message("无法识别该二维码，请对准设备上的二维码")
             }
@@ -64,23 +73,23 @@ class ScanController(
     fun onNfc(payload: NfcPayload) {
         val sn = payload.sn
         if (!sn.isNullOrBlank()) {
-            resolve("SN", sn, null)
+            resolve("SN", sn, null, ScanSource.Nfc)
             return
         }
         val nqt = payload.nqt
         if (!nqt.isNullOrBlank()) {
-            resolve("NQT", nqt, null)
+            resolve("NQT", nqt, null, ScanSource.Nfc)
             return
         }
         val imei = payload.imei
         if (!imei.isNullOrBlank()) {
-            resolve("IMEI", imei, null)
+            resolve("IMEI", imei, null, ScanSource.Nfc)
             return
         }
         val tagId = payload.tagId
         if (!tagId.isNullOrBlank()) {
+            _state.value = ScanState.Resolving(ScanSource.Nfc)
             scope.launch {
-                _state.value = ScanState.Loading
                 try {
                     val binding = nfcTagStore.find(tagId)
                     if (binding == null) {
@@ -144,9 +153,10 @@ class ScanController(
         _state.value = ScanState.Message(text, rawUrl)
     }
 
-    private fun resolve(key: String, value: String, bindTagId: String?) {
+    private fun resolve(key: String, value: String, bindTagId: String?, source: ScanSource) {
+        // 先同步切状态，让界面在识别到的瞬间就能给出成功反馈，再开始网络请求。
+        _state.value = ScanState.Resolving(source)
         scope.launch {
-            _state.value = ScanState.Loading
             resolveNow(key, value, bindTagId)
         }
     }

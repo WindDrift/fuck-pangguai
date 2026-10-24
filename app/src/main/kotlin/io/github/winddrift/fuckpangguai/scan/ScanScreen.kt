@@ -4,8 +4,15 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,7 +35,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +66,7 @@ fun ScanScreen(
     onLogout: () -> Unit,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val state by controller.state.collectAsStateWithLifecycle()
     val colors = MiuixTheme.colorScheme
     val scope = rememberCoroutineScope()
@@ -72,6 +86,12 @@ fun ScanScreen(
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    LaunchedEffect(state) {
+        if (state is ScanState.Resolving) {
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
     }
 
@@ -142,6 +162,13 @@ fun ScanScreen(
                         }
                     }
                 }
+
+                (state as? ScanState.Resolving)?.let { resolving ->
+                    ResolvingOverlay(
+                        source = resolving.source,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -177,9 +204,7 @@ fun ScanScreen(
 
             when (val current = state) {
                 ScanState.Idle -> Unit
-                ScanState.Loading -> {
-                    Text("正在解析设备…", style = MiuixTheme.textStyles.body1)
-                }
+                is ScanState.Resolving -> Unit
 
                 is ScanState.DeviceReady -> {
                     DeviceCard(
@@ -273,6 +298,94 @@ fun ScanScreen(
                 Text("退出登录")
             }
         }
+    }
+}
+
+@Composable
+private fun ResolvingOverlay(
+    source: ScanSource,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MiuixTheme.colorScheme
+    Box(
+        modifier = modifier.background(Color.Black.copy(alpha = 0.55f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(24.dp)
+                .background(colors.surface, RoundedCornerShape(24.dp))
+                .padding(horizontal = 32.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SuccessMark()
+            Text(
+                text = if (source == ScanSource.Qr) "扫码成功" else "已读取标签",
+                style = MiuixTheme.textStyles.title2,
+                color = colors.onSurface,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                LoadingRing(color = colors.primary)
+                Text(
+                    text = if (source == ScanSource.Qr) {
+                        "正在获取设备信息…"
+                    } else {
+                        "正在解析设备…"
+                    },
+                    style = MiuixTheme.textStyles.body2,
+                    color = colors.onSurfaceSecondary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuccessMark() {
+    val colors = MiuixTheme.colorScheme
+    val primary = colors.primary
+    val onPrimary = colors.onPrimary
+    Canvas(Modifier.size(56.dp)) {
+        drawCircle(color = primary)
+        val stroke = 4.dp.toPx()
+        drawLine(
+            color = onPrimary,
+            start = Offset(size.width * 0.27f, size.height * 0.52f),
+            end = Offset(size.width * 0.43f, size.height * 0.68f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = onPrimary,
+            start = Offset(size.width * 0.43f, size.height * 0.68f),
+            end = Offset(size.width * 0.74f, size.height * 0.32f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round,
+        )
+    }
+}
+
+@Composable
+private fun LoadingRing(color: Color) {
+    val transition = rememberInfiniteTransition(label = "resolving")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 900, easing = LinearEasing)),
+        label = "angle",
+    )
+    Canvas(Modifier.size(16.dp)) {
+        drawArc(
+            color = color,
+            startAngle = angle,
+            sweepAngle = 260f,
+            useCenter = false,
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
+        )
     }
 }
 

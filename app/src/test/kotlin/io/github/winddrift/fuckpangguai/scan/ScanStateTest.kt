@@ -28,8 +28,8 @@ class ScanStateTest {
     }
 
     @Test
-    fun `ignores camera scan while loading or showing a message`() {
-        assertFalse(ScanState.Loading.acceptsCameraScan())
+    fun `ignores camera scan while resolving or showing a message`() {
+        assertFalse(ScanState.Resolving(ScanSource.Qr).acceptsCameraScan())
         assertFalse(ScanState.Message("无法识别该二维码").acceptsCameraScan())
     }
 }
