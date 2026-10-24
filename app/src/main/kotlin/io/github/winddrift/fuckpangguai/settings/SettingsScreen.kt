@@ -181,7 +181,7 @@ fun SettingsScreen(
             PreferenceGroup(title = "数据") {
                 ArrowPreference(
                     title = "导出 CSV",
-                    summary = "将本机全部接水记录保存为 CSV 文件",
+                    summary = "将当前账号的全部接水记录保存为 CSV 文件",
                     startAction = {
                         Icon(
                             imageVector = MiuixIcons.Download,
@@ -194,7 +194,7 @@ fun SettingsScreen(
                 PreferenceDivider()
                 ArrowPreference(
                     title = "清空接水历史",
-                    summary = "删除本机全部接水记录",
+                    summary = "删除当前账号在本机的全部接水记录",
                     startAction = {
                         Icon(
                             imageVector = MiuixIcons.Delete,
@@ -250,7 +250,7 @@ fun SettingsScreen(
     ConfirmDialog(
         show = showClearConfirm,
         title = "清空接水历史？",
-        summary = "本机保存的全部接水记录将被删除，此操作无法撤销。",
+        summary = "当前账号在本机保存的全部接水记录将被删除，此操作无法撤销。",
         confirmText = "清空",
         destructive = true,
         onConfirm = {

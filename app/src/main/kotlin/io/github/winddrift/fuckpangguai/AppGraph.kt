@@ -40,6 +40,7 @@ class AppGraph(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     val accountStore = AccountStore(appContext)
+    val historyRepository = HistoryRepository(appContext, accountStore)
     private val disclaimerStore = DisclaimerStore(appContext)
     private val sessionExpiryNotifier = SessionExpiryNotifier()
 
@@ -86,19 +87,23 @@ class AppGraph(context: Context) {
         .build()
 
     val api: QiekjApi = retrofit.create(QiekjApi::class.java)
-    val accountRepository = AccountRepository(api = api, accountStore = accountStore)
+    val accountRepository = AccountRepository(
+        api = api,
+        accountStore = accountStore,
+        historyRepository = historyRepository,
+    )
 
     val waterRepository = WaterRepository(api)
     val nfcTagStore = NfcTagStore(appContext)
     val settingsStore = AppSettingsStore(appContext)
     val deviceConfigStore = DeviceConfigStore(appContext)
-    val historyRepository = HistoryRepository(appContext)
     val waterSessionStore = WaterSessionStore(appContext)
     val waterSessionManager = WaterSessionManager(
         context = appContext,
         scope = scope,
         store = waterSessionStore,
         waterRepository = waterRepository,
+        accountStore = accountStore,
     )
 
     val controller = AppController(

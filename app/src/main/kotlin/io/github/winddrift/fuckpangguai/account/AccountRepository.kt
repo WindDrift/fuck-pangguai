@@ -1,6 +1,7 @@
 package io.github.winddrift.fuckpangguai.account
 
 import io.github.winddrift.fuckpangguai.core.AppConfig
+import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import io.github.winddrift.fuckpangguai.net.ApiException
 import io.github.winddrift.fuckpangguai.net.QiekjApi
 import io.github.winddrift.fuckpangguai.net.requireSuccess
@@ -8,6 +9,7 @@ import io.github.winddrift.fuckpangguai.net.requireSuccess
 class AccountRepository(
     private val api: QiekjApi,
     private val accountStore: AccountStore,
+    private val historyRepository: HistoryRepository,
 ) {
     val accounts = accountStore.accounts
     val activeAccount = accountStore.activeAccount
@@ -68,12 +70,16 @@ class AccountRepository(
         if (profile.id.isBlank() && profile.phone.isBlank()) {
             throw ApiException(-1, "账号资料为空")
         }
-        return accountStore.updateProfile(
+        val result = accountStore.updateProfile(
             localId = localId,
             serverId = profile.id,
             nickname = profile.userName,
             phone = profile.phone,
             avatarUrl = profile.headImageId,
         )
+        result?.mergedFromLocalId?.let { from ->
+            historyRepository.reassignAccount(from, result.account.localId)
+        }
+        return result
     }
 }

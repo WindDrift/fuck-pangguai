@@ -1,6 +1,7 @@
 package io.github.winddrift.fuckpangguai.water
 
 import android.content.Context
+import io.github.winddrift.fuckpangguai.account.AccountStore
 import io.github.winddrift.fuckpangguai.confirm.UnlockSession
 import io.github.winddrift.fuckpangguai.service.WaterSyncService
 import kotlinx.coroutines.CoroutineScope
@@ -11,6 +12,7 @@ class WaterSessionManager(
     private val scope: CoroutineScope,
     private val store: WaterSessionStore,
     private val waterRepository: WaterRepository,
+    private val accountStore: AccountStore,
 ) {
     val session = store.session
 
@@ -34,6 +36,7 @@ class WaterSessionManager(
                 msgId = unlocked.unlock.msgId,
                 supportAppUserFinish = unlocked.device.detail.supportAppUserFinish,
                 startedAt = System.currentTimeMillis(),
+                accountId = accountStore.activeLocalId().orEmpty(),
             )
             store.save(session)
             WaterSyncService.start(context, session)

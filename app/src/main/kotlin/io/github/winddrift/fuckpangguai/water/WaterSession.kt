@@ -20,6 +20,7 @@ data class WaterSession(
     val settleAttempted: Boolean = false,
     val error: String = "",
     val updatedAt: Long = startedAt,
+    val accountId: String = "",
 )
 
 object SessionPhase {
