@@ -16,7 +16,7 @@ fun DeviceInfoCard(
         modifier = modifier,
         title = detail.name.ifBlank { "饮水机" },
     ) {
-        KeyValueRow("goodsId", device.scan.id)
+        KeyValueRow("商品 ID", device.scan.id)
         KeyValueRow("SN/IMEI", maskSn(detail.imei))
         KeyValueRow("类别", "${device.scan.categoryName}（${device.scan.categoryCode}）")
         KeyValueRow(

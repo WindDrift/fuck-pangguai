@@ -5,8 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +22,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.winddrift.fuckpangguai.account.formatLogAmount
 import io.github.winddrift.fuckpangguai.account.pointsToYuan
@@ -33,9 +36,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -105,84 +110,100 @@ fun TicketAssetSheet(
     OverlayBottomSheet(
         show = show,
         title = selectedShop?.let { "小票流水 · ${it.shopName}" } ?: "通用小票",
+        startAction = if (selectedShop == null) {
+            null
+        } else {
+            {
+                IconButton(
+                    onClick = { selectedShop = null },
+                    backgroundColor = Color.Transparent,
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Back,
+                        contentDescription = "返回小票列表",
+                    )
+                }
+            }
+        },
         onDismissRequest = onDismiss,
     ) {
-        if (selectedShop == null) {
-            if (tickets.isEmpty()) {
-                EmptyState(
-                    icon = MiuixIcons.Recent,
-                    title = "暂无通用小票",
-                    summary = "当前账号还没有可展示的通用小票。",
-                )
-            } else {
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 420.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    tickets.forEachIndexed { index, ticket ->
-                        if (index > 0) PreferenceDivider()
-                        TicketRow(ticket = ticket, onClick = { selectedShop = ticket })
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+        ) {
+            val shop = selectedShop
+            if (shop == null) {
+                if (tickets.isEmpty()) {
+                    EmptyState(
+                        icon = MiuixIcons.Recent,
+                        title = "暂无通用小票",
+                        summary = "当前账号还没有可展示的通用小票。",
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        tickets.forEachIndexed { index, ticket ->
+                            if (index > 0) PreferenceDivider()
+                            TicketRow(ticket = ticket, onClick = { selectedShop = ticket })
+                        }
+                        if (!ticketsComplete) {
+                            Text(
+                                text = "仅展示已加载的部分小票。",
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = colors.onSurfaceSecondary,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            )
+                        }
                     }
-                    if (!ticketsComplete) {
-                        Text(
-                            text = "仅展示已加载的部分小票。",
-                            style = MiuixTheme.textStyles.footnote1,
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when {
+                        logs.isEmpty() && loading -> Text(
+                            text = "正在加载流水…",
+                            style = MiuixTheme.textStyles.body2,
                             color = colors.onSurfaceSecondary,
-                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+
+                        logs.isEmpty() && error == null -> Text(
+                            text = "暂无流水",
+                            style = MiuixTheme.textStyles.body2,
+                            color = colors.onSurfaceSecondary,
                         )
                     }
-                }
-            }
-            return@OverlayBottomSheet
-        }
-
-        val shop = selectedShop ?: return@OverlayBottomSheet
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(
-                text = "返回小票列表",
-                onClick = { selectedShop = null },
-            )
-            when {
-                logs.isEmpty() && loading -> Text(
-                    text = "正在加载流水…",
-                    style = MiuixTheme.textStyles.body2,
-                    color = colors.onSurfaceSecondary,
-                )
-
-                logs.isEmpty() && error == null -> Text(
-                    text = "暂无流水",
-                    style = MiuixTheme.textStyles.body2,
-                    color = colors.onSurfaceSecondary,
-                )
-            }
-            if (logs.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 360.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    logs.forEachIndexed { index, log ->
-                        if (index > 0) PreferenceDivider()
-                        LogRow(log = log)
+                    if (logs.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 360.dp)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            logs.forEachIndexed { index, log ->
+                                if (index > 0) PreferenceDivider()
+                                LogRow(log = log)
+                            }
+                        }
                     }
-                }
-            }
-            if (error != null) {
-                Text(
-                    text = "流水加载失败：$error",
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = colors.error,
-                )
-            }
-            if (hasMore) {
-                Button(
-                    onClick = { request(shop, page + 1) },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !loading,
-                    colors = ButtonDefaults.buttonColorsPrimary(),
-                ) {
-                    Text(if (loading) "加载中…" else "加载更多")
+                    if (error != null) {
+                        Text(
+                            text = "流水加载失败：$error",
+                            style = MiuixTheme.textStyles.footnote1,
+                            color = colors.error,
+                        )
+                    }
+                    if (hasMore) {
+                        Button(
+                            onClick = { request(shop, page + 1) },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !loading,
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                        ) {
+                            Text(if (loading) "加载中…" else "加载更多")
+                        }
+                    }
                 }
             }
         }
@@ -231,12 +252,13 @@ private fun LogRow(log: TicketLog) {
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        val title = log.remark.ifBlank { "通用小票变动" }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = log.remark.ifBlank { "通用小票变动" },
+                text = title,
                 style = MiuixTheme.textStyles.body1,
                 modifier = Modifier.weight(1f),
             )
@@ -250,11 +272,16 @@ private fun LogRow(log: TicketLog) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(
-                text = log.shopName,
-                style = MiuixTheme.textStyles.footnote1,
-                color = colors.onSurfaceSecondary,
-            )
+            if (log.shopName.isNotBlank() && log.shopName != title) {
+                Text(
+                    text = log.shopName,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.onSurfaceSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
             Text(
                 text = log.createdAt,
                 style = MiuixTheme.textStyles.footnote1,

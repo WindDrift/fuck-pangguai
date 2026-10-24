@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -50,7 +51,10 @@ fun ScanStateOverlays(
                 title = "设备信息",
                 onDismissRequest = onReset,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     DeviceInfoCard(device = state.device)
                     if (state.device.detail.isBluetooth == 1) {
                         Text(
@@ -105,7 +109,10 @@ fun ScanStateOverlays(
                 title = "绑定标签到设备？",
                 onDismissRequest = onReset,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     SectionCard(title = state.device.detail.name.ifBlank { "饮水机" }) {
                         KeyValueRow("标签 ID", state.tagId)
                         KeyValueRow("SN", state.device.sourceValue)

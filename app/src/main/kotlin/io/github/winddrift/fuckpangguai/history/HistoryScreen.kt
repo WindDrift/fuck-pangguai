@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +47,7 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.PullToRefresh
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -55,6 +59,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 @Composable
 fun HistoryScreen(
     repository: HistoryRepository,
+    scrollBehavior: ScrollBehavior? = null,
 ) {
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
@@ -81,6 +86,7 @@ fun HistoryScreen(
     PullToRefresh(
         isRefreshing = refreshing,
         onRefresh = ::refresh,
+        topAppBarScrollBehavior = scrollBehavior,
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -139,7 +145,12 @@ fun HistoryScreen(
             title = "记录详情",
             onDismissRequest = { selectedRecord = null },
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 SectionCard(title = record.deviceName.ifBlank { "饮水机" }) {
                     KeyValueRow("时间", formatHistoryTime(record.updatedAt))
                     KeyValueRow("状态", sessionPhaseLabel(record.phase))
@@ -152,8 +163,8 @@ fun HistoryScreen(
                     if (record.payOrderNo.isNotBlank()) {
                         KeyValueRow("结算订单", record.payOrderNo)
                     }
-                    KeyValueRow("goodsId", record.goodsId)
-                    KeyValueRow("skuId", record.skuId)
+                    KeyValueRow("商品 ID", record.goodsId)
+                    KeyValueRow("规格 ID", record.skuId)
                     if (record.error.isNotBlank()) {
                         Text(
                             text = record.error,
@@ -241,7 +252,7 @@ private fun HistoryCard(
                     PhaseBadge(record.phase)
                     if (record.amount.isNotBlank()) {
                         Text(
-                            text = record.amount,
+                            text = "用量 ${record.amount}",
                             style = MiuixTheme.textStyles.footnote1,
                             color = MiuixTheme.colorScheme.onSurfaceSecondary,
                         )

@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -16,10 +17,12 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 fun AppTopBar(
     title: String,
     onBack: (() -> Unit)? = null,
+    scrollBehavior: ScrollBehavior? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     TopAppBar(
         title = title,
+        scrollBehavior = scrollBehavior,
         navigationIcon = {
             if (onBack != null) {
                 IconButton(

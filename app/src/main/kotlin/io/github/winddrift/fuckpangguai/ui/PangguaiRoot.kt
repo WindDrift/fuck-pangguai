@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -73,6 +75,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -120,6 +123,9 @@ fun PangguaiRoot(
     }
     val confirmState by confirmStateFlow.collectAsStateWithLifecycle()
 
+    val historyScrollBehavior = MiuixScrollBehavior()
+    val settingsScrollBehavior = MiuixScrollBehavior()
+    val debugScrollBehavior = MiuixScrollBehavior()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val snackbar = remember(snackbarHostState, scope) {
@@ -242,6 +248,22 @@ fun PangguaiRoot(
         tab == MainTab.Settings -> RootDestination.Settings
         else -> RootDestination.Scan
     }
+
+    LaunchedEffect(destination) {
+        if (destination !is RootDestination.History) {
+            historyScrollBehavior.state.heightOffset = 0f
+            historyScrollBehavior.state.contentOffset = 0f
+        }
+        if (destination !is RootDestination.Settings) {
+            settingsScrollBehavior.state.heightOffset = 0f
+            settingsScrollBehavior.state.contentOffset = 0f
+        }
+        if (destination != RootDestination.Debug) {
+            debugScrollBehavior.state.heightOffset = 0f
+            debugScrollBehavior.state.contentOffset = 0f
+        }
+    }
+
     val topBarKind = when {
         session != null -> RootTopBar.Using
         state != AppState.Ready -> RootTopBar.None
@@ -271,7 +293,20 @@ fun PangguaiRoot(
             modifier = Modifier.fillMaxSize(),
             containerColor = MiuixTheme.colorScheme.surface,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = {
+                SnackbarHost(
+                    snackbarHostState,
+                    modifier = Modifier
+                        .then(
+                            if (bottomBarKind == RootBottomBar.None) {
+                                Modifier.navigationBarsPadding()
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .imePadding(),
+                )
+            },
             topBar = {
                 AnimatedContent(
                     targetState = topBarKind,
@@ -285,7 +320,11 @@ fun PangguaiRoot(
                         RootTopBar.None -> Unit
                         RootTopBar.Using -> AppTopBar("接水状态", onBack = ::requestUsingExit)
                         RootTopBar.Confirm -> AppTopBar("确认设备", onBack = { secondary = null })
-                        RootTopBar.Debug -> AppTopBar("诊断", onBack = { secondary = null })
+                        RootTopBar.Debug -> AppTopBar(
+                            "诊断",
+                            onBack = { secondary = null },
+                            scrollBehavior = debugScrollBehavior,
+                        )
                         RootTopBar.AccountAccess -> AppTopBar(
                             accountAccessTitle,
                             onBack = {
@@ -294,8 +333,14 @@ fun PangguaiRoot(
                             },
                         )
 
-                        RootTopBar.History -> AppTopBar("接水记录")
-                        RootTopBar.Settings -> AppTopBar("设置")
+                        RootTopBar.History -> AppTopBar(
+                            "接水记录",
+                            scrollBehavior = historyScrollBehavior,
+                        )
+                        RootTopBar.Settings -> AppTopBar(
+                            "设置",
+                            scrollBehavior = settingsScrollBehavior,
+                        )
                     }
                 }
             },
@@ -387,6 +432,7 @@ fun PangguaiRoot(
                                 controller.cancelAuth()
                                 secondary = null
                             },
+                            topInsetHandled = true,
                         )
 
                         is RootDestination.Confirm -> ConfirmScreen(
@@ -403,9 +449,13 @@ fun PangguaiRoot(
                             nfcTagStore = nfcTagStore,
                             scanController = scanController,
                             onImportToken = controller::importToken,
+                            scrollBehavior = debugScrollBehavior,
                         )
 
-                        RootDestination.History -> HistoryScreen(repository = historyRepository)
+                        RootDestination.History -> HistoryScreen(
+                            repository = historyRepository,
+                            scrollBehavior = historyScrollBehavior,
+                        )
 
                         RootDestination.Settings -> SettingsScreen(
                             settingsStore = settingsStore,
@@ -426,6 +476,7 @@ fun PangguaiRoot(
                             onRenameAccount = controller::renameAccount,
                             onDeleteAccount = controller::deleteAccount,
                             onLogout = controller::logoutCurrent,
+                            scrollBehavior = settingsScrollBehavior,
                         )
 
                         RootDestination.Scan -> ScanScreen(

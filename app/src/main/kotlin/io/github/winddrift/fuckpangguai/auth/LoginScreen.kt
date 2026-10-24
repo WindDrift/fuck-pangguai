@@ -7,12 +7,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -61,6 +65,7 @@ fun LoginScreen(
     onSelectAccount: (StoredAccount) -> Unit = {},
     onRequestReauth: (StoredAccount) -> Unit = {},
     onCancel: (() -> Unit)? = null,
+    topInsetHandled: Boolean = false,
 ) {
     val colors = MiuixTheme.colorScheme
     var phone by rememberSaveable { mutableStateOf("") }
@@ -81,10 +86,15 @@ fun LoginScreen(
         AuthTarget.None -> "扫码接水，快一点。"
     }
 
+    val windowInsets = if (topInsetHandled) {
+        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+    } else {
+        WindowInsets.safeDrawing
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .safeDrawingPadding()
+            .windowInsetsPadding(windowInsets)
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp),
