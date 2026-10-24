@@ -131,6 +131,7 @@ class ScanController(
                 )
                 pendingTagId = null
                 _state.value = ScanState.DeviceReady(current.device)
+                prefetchPlans(current.device)
             } catch (throwable: Throwable) {
                 _state.value = ScanState.Message(throwable.userMessage())
             }
@@ -142,6 +143,7 @@ class ScanController(
         if (current !is ScanState.ConfirmBind) return
         pendingTagId = null
         _state.value = ScanState.DeviceReady(current.device)
+        prefetchPlans(current.device)
     }
 
     fun reset() {
@@ -164,13 +166,20 @@ class ScanController(
     private suspend fun resolveNow(key: String, value: String, bindTagId: String?) {
         try {
             val resolved = deviceRepository.resolve(key, value)
-            _state.value = if (bindTagId != null) {
-                ScanState.ConfirmBind(bindTagId, resolved)
+            if (bindTagId != null) {
+                _state.value = ScanState.ConfirmBind(bindTagId, resolved)
             } else {
-                ScanState.DeviceReady(resolved)
+                _state.value = ScanState.DeviceReady(resolved)
+                prefetchPlans(resolved)
             }
         } catch (throwable: Throwable) {
             _state.value = ScanState.Message(throwable.userMessage())
+        }
+    }
+
+    private fun prefetchPlans(device: ResolvedDevice) {
+        scope.launch {
+            deviceRepository.prefetchPlans(device)
         }
     }
 }

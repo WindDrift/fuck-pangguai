@@ -24,6 +24,7 @@ import io.github.winddrift.fuckpangguai.water.WaterSessionStore
 import io.github.winddrift.fuckpangguai.location.LocationProvider
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
 import io.github.winddrift.fuckpangguai.storage.DeviceConfigStore
+import io.github.winddrift.fuckpangguai.storage.PlanCacheStore
 import io.github.winddrift.fuckpangguai.confirm.ConfirmController
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import android.content.Context
@@ -96,11 +97,20 @@ class AppGraph(context: Context) {
         .build()
 
     val api: QiekjApi = retrofit.create(QiekjApi::class.java)
+    private val planCacheStore = PlanCacheStore(appContext)
+    val deviceRepository = DeviceRepository(
+        api = api,
+        planCache = planCacheStore,
+        accountIdProvider = accountStore::activeLocalId,
+    )
     val accountRepository = AccountRepository(
         api = api,
         accountStore = accountStore,
         historyRepository = historyRepository,
-        onAccountDeleted = { localId -> assetSnapshotStore.delete(localId) },
+        onAccountDeleted = { localId ->
+            assetSnapshotStore.delete(localId)
+            deviceRepository.clearAccountCache(localId)
+        },
     )
 
     val waterRepository = WaterRepository(api)
@@ -150,7 +160,7 @@ class AppGraph(context: Context) {
 
     val scanController = ScanController(
         scope = scope,
-        deviceRepository = DeviceRepository(api),
+        deviceRepository = deviceRepository,
         nfcTagStore = nfcTagStore,
     )
 
@@ -158,7 +168,7 @@ class AppGraph(context: Context) {
 
     fun newConfirmController(): ConfirmController = ConfirmController(
         scope = scope,
-        deviceRepository = DeviceRepository(api),
+        deviceRepository = deviceRepository,
         waterRepository = waterRepository,
         locationProvider = locationProvider,
         settingsStore = settingsStore,
