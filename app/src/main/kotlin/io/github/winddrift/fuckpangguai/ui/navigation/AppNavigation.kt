@@ -1,0 +1,26 @@
+package io.github.winddrift.fuckpangguai.ui.navigation
+
+import androidx.compose.ui.graphics.vector.ImageVector
+import io.github.winddrift.fuckpangguai.device.ResolvedDevice
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Recent
+import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.Settings
+
+enum class MainTab(val label: String) {
+    Scan("扫码"),
+    History("记录"),
+    Settings("设置"),
+}
+
+val MainTab.icon: ImageVector
+    get() = when (this) {
+        MainTab.Scan -> MiuixIcons.Scan
+        MainTab.History -> MiuixIcons.Recent
+        MainTab.Settings -> MiuixIcons.Settings
+    }
+
+sealed interface SecondaryPage {
+    data class Confirm(val device: ResolvedDevice) : SecondaryPage
+    data object Debug : SecondaryPage
+}
