@@ -1,8 +1,6 @@
 package io.github.winddrift.fuckpangguai.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -13,7 +11,14 @@ import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.anim.folmeSpring
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+private val checkMarkSpring = folmeSpring<Float>(
+    damping = 0.82f,
+    response = 0.42f,
+    visibilityThreshold = 0.001f,
+)
 
 @Composable
 fun AnimatedCheckMark(
@@ -25,7 +30,7 @@ fun AnimatedCheckMark(
     LaunchedEffect(Unit) {
         progress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+            animationSpec = checkMarkSpring,
         )
     }
 

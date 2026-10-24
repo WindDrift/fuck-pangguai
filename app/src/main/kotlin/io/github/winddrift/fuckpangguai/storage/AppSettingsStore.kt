@@ -18,6 +18,7 @@ enum class AppThemeMode { System, Light, Dark }
 data class ThemeSettings(
     val mode: AppThemeMode = AppThemeMode.System,
     val dynamicColor: Boolean = false,
+    val floatingNavBar: Boolean = false,
 )
 
 class AppSettingsStore(private val context: Context) : SettingsSource {
@@ -42,6 +43,7 @@ class AppSettingsStore(private val context: Context) : SettingsSource {
                 ?.let { stored -> AppThemeMode.entries.firstOrNull { it.name == stored } }
                 ?: AppThemeMode.System,
             dynamicColor = preferences[DYNAMIC_COLOR] ?: false,
+            floatingNavBar = preferences[FLOATING_NAV_BAR] ?: false,
         )
     }
 
@@ -53,11 +55,16 @@ class AppSettingsStore(private val context: Context) : SettingsSource {
         context.appDataStore.edit { it[DYNAMIC_COLOR] = enabled }
     }
 
+    suspend fun setFloatingNavBar(enabled: Boolean) {
+        context.appDataStore.edit { it[FLOATING_NAV_BAR] = enabled }
+    }
+
     private companion object {
         val ONE_TAP = booleanPreferencesKey("one_tap_unlock")
         val DRY_RUN = booleanPreferencesKey("dry_run")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val FLOATING_NAV_BAR = booleanPreferencesKey("floating_nav_bar")
     }
 }
 

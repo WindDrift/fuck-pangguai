@@ -1,13 +1,13 @@
 package io.github.winddrift.fuckpangguai.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import io.github.winddrift.fuckpangguai.ui.animation.ValueSpringSpec
 import top.yukonga.miuix.kmp.basic.Text
 import java.util.Locale
 
@@ -39,7 +39,7 @@ fun AmountText(
     val decimals = numeric.substringAfter('.', missingDelimiterValue = "").length
     val animated by animateFloatAsState(
         targetValue = target,
-        animationSpec = tween(durationMillis = 350),
+        animationSpec = ValueSpringSpec,
         label = "amount",
     )
     Text(

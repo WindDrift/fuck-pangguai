@@ -1,5 +1,7 @@
 package io.github.winddrift.fuckpangguai.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,10 +16,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.BuildConfig
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
+import io.github.winddrift.fuckpangguai.history.toCsv
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
 import io.github.winddrift.fuckpangguai.storage.AppThemeMode
 import io.github.winddrift.fuckpangguai.storage.ThemeSettings
@@ -25,11 +29,15 @@ import io.github.winddrift.fuckpangguai.ui.components.ConfirmDialog
 import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceGroup
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
@@ -43,6 +51,7 @@ fun SettingsScreen(
     onOpenDebug: () -> Unit,
     onLogout: () -> Unit,
 ) {
+    val context = LocalContext.current
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
     val colors = MiuixTheme.colorScheme
@@ -54,10 +63,47 @@ fun SettingsScreen(
     var versionTaps by remember { mutableIntStateOf(0) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var pendingCsv by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         oneTap = settingsStore.isOneTapEnabled()
         dryRun = settingsStore.isDryRun()
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv"),
+    ) { uri ->
+        val csv = pendingCsv
+        pendingCsv = null
+        if (uri == null || csv == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { output ->
+                        output.write(("\uFEFF" + csv).toByteArray(Charsets.UTF_8))
+                    } ?: error("无法打开输出文件")
+                }.isSuccess
+            }
+            snackbar.show(
+                if (ok) "CSV 已导出" else "CSV 导出失败",
+                isError = !ok,
+            )
+        }
+    }
+
+    fun exportCsv() {
+        scope.launch {
+            val records = runCatching { historyRepository.list() }.getOrElse {
+                snackbar.show("读取记录失败", isError = true)
+                return@launch
+            }
+            if (records.isEmpty()) {
+                snackbar.show("还没有可导出的记录")
+                return@launch
+            }
+            pendingCsv = records.toCsv()
+            exportLauncher.launch("pangguai-history.csv")
+        }
     }
 
     LazyColumn(
@@ -94,6 +140,15 @@ fun SettingsScreen(
                     title = "动态取色",
                     summary = "跟随系统壁纸（Monet），关闭时使用 Miuix 默认蓝",
                 )
+                PreferenceDivider()
+                SwitchPreference(
+                    checked = themeSettings.floatingNavBar,
+                    onCheckedChange = { enabled ->
+                        scope.launch { settingsStore.setFloatingNavBar(enabled) }
+                    },
+                    title = "悬浮底栏",
+                    summary = "底部导航以悬浮胶囊显示",
+                )
             }
         }
 
@@ -124,8 +179,28 @@ fun SettingsScreen(
         item {
             PreferenceGroup(title = "数据") {
                 ArrowPreference(
+                    title = "导出 CSV",
+                    summary = "将本机全部接水记录保存为 CSV 文件",
+                    startAction = {
+                        Icon(
+                            imageVector = MiuixIcons.Download,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    },
+                    onClick = ::exportCsv,
+                )
+                PreferenceDivider()
+                ArrowPreference(
                     title = "清空接水历史",
                     summary = "删除本机全部接水记录",
+                    startAction = {
+                        Icon(
+                            imageVector = MiuixIcons.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    },
                     onClick = { showClearConfirm = true },
                 )
             }

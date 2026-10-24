@@ -75,7 +75,7 @@ flowchart LR
 | 数据 | 位置 | 说明 |
 | --- | --- | --- |
 | 登录 token | DataStore + Android Keystore | AES-GCM 加密后保存，密钥不出 Keystore |
-| 主题、演练模式、一键解锁 | DataStore Preferences | 本机设置 |
+| 主题、动态取色、悬浮底栏、演练模式、一键解锁 | DataStore Preferences | 本机设置 |
 | 当前接水会话 | DataStore Preferences | JSON 序列化，供前台服务恢复 |
 | NFC 标签映射 | DataStore Preferences | 标签 ID → SN、设备名、商品 ID |
 | 接水历史 | SQLite `pangguai_history.db` | 订单号、金额、阶段、错误与时间 |

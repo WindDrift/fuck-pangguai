@@ -10,6 +10,12 @@ import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +53,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import io.github.winddrift.fuckpangguai.nfc.NfcReader
+import io.github.winddrift.fuckpangguai.ui.animation.ColorSpringSpec
+import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.components.AnimatedCheckMark
 import io.github.winddrift.fuckpangguai.ui.components.AppSnackbarState
 import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
@@ -88,6 +96,16 @@ fun ScanScreen(
     val torchOn by cameraState.torchOn.collectAsStateWithLifecycle()
     val flashAvailable by cameraState.flashAvailable.collectAsStateWithLifecycle()
     val hasNfc = remember(context) { NfcAdapter.getDefaultAdapter(context) != null }
+    val torchTint by animateColorAsState(
+        targetValue = if (torchOn) colors.primary else Color.White,
+        animationSpec = ColorSpringSpec,
+        label = "torchTint",
+    )
+    var resolvingSource by remember { mutableStateOf(ScanSource.Qr) }
+
+    LaunchedEffect(state) {
+        (state as? ScanState.Resolving)?.let { resolvingSource = it.source }
+    }
 
     var manualInput by rememberSaveable { mutableStateOf(false) }
     var manualText by rememberSaveable { mutableStateOf("") }
@@ -232,7 +250,7 @@ fun ScanScreen(
                     ScanToolButton(
                         icon = TorchIcon,
                         contentDescription = if (torchOn) "关闭手电筒" else "打开手电筒",
-                        tint = if (torchOn) colors.primary else Color.White,
+                        tint = torchTint,
                         onClick = cameraState::toggleTorch,
                     )
                 }
@@ -244,9 +262,14 @@ fun ScanScreen(
             }
         }
 
-        (state as? ScanState.Resolving)?.let { resolving ->
+        AnimatedVisibility(
+            visible = state is ScanState.Resolving,
+            modifier = Modifier.fillMaxSize(),
+            enter = fadeIn(ContentFadeSpec) + scaleIn(ContentFadeSpec, initialScale = 0.94f),
+            exit = fadeOut(ContentFadeSpec) + scaleOut(ContentFadeSpec, targetScale = 0.96f),
+        ) {
             ResolvingOverlay(
-                source = resolving.source,
+                source = resolvingSource,
                 modifier = Modifier.fillMaxSize(),
             )
         }

@@ -5,6 +5,12 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
+import io.github.winddrift.fuckpangguai.ui.animation.ContentSlideSpec
 import io.github.winddrift.fuckpangguai.ui.components.AmountText
 import io.github.winddrift.fuckpangguai.ui.components.KeyValueRow
 import io.github.winddrift.fuckpangguai.ui.components.PhaseBadge
@@ -77,11 +85,20 @@ fun UsingScreen(session: WaterSession) {
                 style = MiuixTheme.textStyles.title1,
                 color = colors.primary,
             )
-            Text(
-                text = if (terminal) "本次接水已结束" else "接水进行中",
-                style = MiuixTheme.textStyles.footnote1,
-                color = colors.onSurfaceSecondary,
-            )
+            AnimatedContent(
+                targetState = terminal,
+                transitionSpec = {
+                    (fadeIn(ContentFadeSpec) + slideInVertically(ContentSlideSpec) { it / 3 }) togetherWith
+                        (fadeOut(ContentFadeSpec) + slideOutVertically(ContentSlideSpec) { -it / 3 })
+                },
+                label = "sessionTerminal",
+            ) { ended ->
+                Text(
+                    text = if (ended) "本次接水已结束" else "接水进行中",
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.onSurfaceSecondary,
+                )
+            }
         }
 
         SectionCard(title = "进度") {
