@@ -1,13 +1,13 @@
 package io.github.winddrift.fuckpangguai.auth
 
+import io.github.winddrift.fuckpangguai.account.AccountStore
 import io.github.winddrift.fuckpangguai.core.AppConfig
 import io.github.winddrift.fuckpangguai.net.QiekjApi
 import io.github.winddrift.fuckpangguai.net.requireSuccess
-import io.github.winddrift.fuckpangguai.storage.TokenStore
 
 class AuthRepository(
     private val api: QiekjApi,
-    private val tokenStore: TokenStore,
+    private val accountStore: AccountStore,
 ) {
 
     suspend fun sendCode(phone: String) {
@@ -33,7 +33,7 @@ class AuthRepository(
         if (token.isBlank()) {
             throw io.github.winddrift.fuckpangguai.net.ApiException(response.code, "登录成功但未返回 token")
         }
-        tokenStore.save(token)
+        accountStore.addOrMerge(token, phone)
     }
 
     /**
@@ -41,13 +41,13 @@ class AuthRepository(
      * 秒验 flow that expects mobToken/mobOpToken; calling it with an empty body makes the server
      * reject a valid token, which previously cleared the login state on every restart.
      */
-    suspend fun hasStoredToken(): Boolean = tokenStore.load() != null
+    suspend fun hasStoredToken(): Boolean = accountStore.hasActiveSession()
 
     suspend fun importToken(token: String) {
-        tokenStore.save(token)
+        accountStore.addOrMerge(token, phoneHint = "")
     }
 
     suspend fun logout() {
-        tokenStore.clear()
+        accountStore.deleteActive()
     }
 }

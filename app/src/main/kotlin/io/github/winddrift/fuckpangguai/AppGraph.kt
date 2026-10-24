@@ -1,11 +1,11 @@
 package io.github.winddrift.fuckpangguai
 
+import io.github.winddrift.fuckpangguai.account.AccountStore
 import io.github.winddrift.fuckpangguai.auth.AuthRepository
 import io.github.winddrift.fuckpangguai.net.QiekjApi
 import io.github.winddrift.fuckpangguai.net.RequestLogInterceptor
 import io.github.winddrift.fuckpangguai.net.SignInterceptor
 import io.github.winddrift.fuckpangguai.storage.DisclaimerStore
-import io.github.winddrift.fuckpangguai.storage.TokenStore
 import io.github.winddrift.fuckpangguai.device.DeviceRepository
 import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
 import io.github.winddrift.fuckpangguai.scan.ScanController
@@ -37,7 +37,7 @@ class AppGraph(context: Context) {
     val appContext: Context = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    val tokenStore = TokenStore(appContext)
+    val accountStore = AccountStore(appContext)
     private val disclaimerStore = DisclaimerStore(appContext)
 
     val deviceId: String = run {
@@ -57,7 +57,7 @@ class AppGraph(context: Context) {
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(
             SignInterceptor(
-                tokenProvider = { tokenStore.currentToken.orEmpty() },
+                tokenProvider = { accountStore.currentToken.orEmpty() },
                 deviceId = deviceId,
                 phoneBrand = Build.BRAND.orEmpty(),
                 androidVersion = Build.VERSION.RELEASE.orEmpty(),
@@ -96,7 +96,7 @@ class AppGraph(context: Context) {
         waterRepository = waterRepository,
     )
 
-    private val authRepository = AuthRepository(api, tokenStore)
+    private val authRepository = AuthRepository(api, accountStore)
 
     val controller = AppController(
         scope = scope,
