@@ -2,6 +2,9 @@ package io.github.winddrift.fuckpangguai
 
 import io.github.winddrift.fuckpangguai.account.AccountRepository
 import io.github.winddrift.fuckpangguai.account.AccountStore
+import io.github.winddrift.fuckpangguai.account.AssetController
+import io.github.winddrift.fuckpangguai.account.AssetRepository
+import io.github.winddrift.fuckpangguai.account.AssetSnapshotStore
 import io.github.winddrift.fuckpangguai.net.QiekjApi
 import io.github.winddrift.fuckpangguai.net.RequestLogInterceptor
 import io.github.winddrift.fuckpangguai.net.SessionExpiryInterceptor
@@ -40,6 +43,7 @@ class AppGraph(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     val accountStore = AccountStore(appContext)
+    val assetSnapshotStore = AssetSnapshotStore(appContext)
     val historyRepository = HistoryRepository(appContext, accountStore)
     private val disclaimerStore = DisclaimerStore(appContext)
     private val sessionExpiryNotifier = SessionExpiryNotifier()
@@ -91,11 +95,24 @@ class AppGraph(context: Context) {
         api = api,
         accountStore = accountStore,
         historyRepository = historyRepository,
+        onAccountDeleted = { localId -> assetSnapshotStore.delete(localId) },
     )
 
     val waterRepository = WaterRepository(api)
     val nfcTagStore = NfcTagStore(appContext)
     val settingsStore = AppSettingsStore(appContext)
+    val assetRepository = AssetRepository(
+        api = api,
+        accountStore = accountStore,
+        accountRepository = accountRepository,
+    )
+    val assetController = AssetController(
+        scope = scope,
+        accountStore = accountStore,
+        assetRepository = assetRepository,
+        snapshotStore = assetSnapshotStore,
+        settingsStore = settingsStore,
+    )
     val deviceConfigStore = DeviceConfigStore(appContext)
     val waterSessionStore = WaterSessionStore(appContext)
     val waterSessionManager = WaterSessionManager(

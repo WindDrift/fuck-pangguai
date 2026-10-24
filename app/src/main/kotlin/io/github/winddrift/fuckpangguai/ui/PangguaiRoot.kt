@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.AppController
 import io.github.winddrift.fuckpangguai.AppState
+import io.github.winddrift.fuckpangguai.account.AssetController
 import io.github.winddrift.fuckpangguai.account.AuthTarget
 import io.github.winddrift.fuckpangguai.auth.DisclaimerScreen
 import io.github.winddrift.fuckpangguai.auth.LoginScreen
@@ -90,6 +91,7 @@ fun PangguaiRoot(
     waterSessionManager: WaterSessionManager,
     historyRepository: HistoryRepository,
     settingsStore: AppSettingsStore,
+    assetController: AssetController,
     nfcTagStore: NfcTagStore,
 ) {
     val context = LocalContext.current
@@ -408,11 +410,21 @@ fun PangguaiRoot(
                         RootDestination.Settings -> SettingsScreen(
                             settingsStore = settingsStore,
                             historyRepository = historyRepository,
+                            assetController = assetController,
+                            accounts = accounts,
+                            activeAccount = activeAccount,
                             onOpenDebug = { secondary = SecondaryPage.Debug },
                             onAddAccount = {
                                 controller.beginAddAccount()
                                 secondary = SecondaryPage.AccountAccess(AuthTarget.AddAccount)
                             },
+                            onSwitchAccount = controller::switchAccount,
+                            onReauthAccount = { localId ->
+                                controller.beginReauth(localId)
+                                secondary = SecondaryPage.AccountAccess(AuthTarget.Reauth(localId))
+                            },
+                            onRenameAccount = controller::renameAccount,
+                            onDeleteAccount = controller::deleteAccount,
                             onLogout = controller::logoutCurrent,
                         )
 

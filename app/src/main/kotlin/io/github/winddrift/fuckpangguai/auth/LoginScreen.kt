@@ -141,10 +141,12 @@ fun LoginScreen(
                             account = account,
                             active = account.localId == activeLocalId,
                             onSelect = {
-                                if (account.invalid) {
-                                    onRequestReauth(account)
-                                } else {
-                                    onSelectAccount(account)
+                                if (account.localId != activeLocalId) {
+                                    if (account.invalid) {
+                                        onRequestReauth(account)
+                                    } else {
+                                        onSelectAccount(account)
+                                    }
                                 }
                             },
                         )

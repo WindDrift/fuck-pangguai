@@ -10,6 +10,7 @@ class AccountRepository(
     private val api: QiekjApi,
     private val accountStore: AccountStore,
     private val historyRepository: HistoryRepository,
+    private val onAccountDeleted: suspend (String) -> Unit = {},
 ) {
     val accounts = accountStore.accounts
     val activeAccount = accountStore.activeAccount
@@ -53,9 +54,19 @@ class AccountRepository(
 
     suspend fun rename(localId: String, alias: String) = accountStore.renameAlias(localId, alias)
 
-    suspend fun delete(localId: String): StoredAccount? = accountStore.delete(localId)
+    suspend fun delete(localId: String): StoredAccount? {
+        val exists = accountStore.accounts.value.any { it.localId == localId }
+        if (!exists) return accountStore.activeAccount.value
+        val next = accountStore.delete(localId)
+        runCatching { historyRepository.clearForAccount(localId) }
+        runCatching { onAccountDeleted(localId) }
+        return next
+    }
 
-    suspend fun logoutActive(): StoredAccount? = accountStore.deleteActive()
+    suspend fun logoutActive(): StoredAccount? {
+        val activeId = accountStore.activeLocalId() ?: return null
+        return delete(activeId)
+    }
 
     suspend fun markInvalidIfActive(token: String): StoredAccount? =
         accountStore.markInvalidIfActive(token)

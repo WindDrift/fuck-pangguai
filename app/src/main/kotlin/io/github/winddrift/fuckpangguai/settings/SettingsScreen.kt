@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.BuildConfig
+import io.github.winddrift.fuckpangguai.account.AssetController
+import io.github.winddrift.fuckpangguai.account.StoredAccount
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import io.github.winddrift.fuckpangguai.history.toCsv
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
@@ -48,8 +50,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun SettingsScreen(
     settingsStore: AppSettingsStore,
     historyRepository: HistoryRepository,
+    assetController: AssetController,
+    accounts: List<StoredAccount>,
+    activeAccount: StoredAccount?,
     onOpenDebug: () -> Unit,
     onAddAccount: () -> Unit,
+    onSwitchAccount: (String) -> Unit,
+    onReauthAccount: (String) -> Unit,
+    onRenameAccount: (String, String) -> Unit,
+    onDeleteAccount: (String) -> Unit,
     onLogout: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -58,6 +67,14 @@ fun SettingsScreen(
     val colors = MiuixTheme.colorScheme
     val themeSettings by settingsStore.themeSettings
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
+    val assetState by assetController.state.collectAsStateWithLifecycle()
+    val assetMatchesActive = assetState.accountId == activeAccount?.localId
+    var showSwitchSheet by remember { mutableStateOf(false) }
+    var showTicketSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        assetController.refresh()
+    }
 
     var oneTap by remember { mutableStateOf(false) }
     var dryRun by remember { mutableStateOf(true) }
@@ -112,6 +129,23 @@ fun SettingsScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item {
+            AccountAssetCard(
+                account = activeAccount,
+                snapshot = assetState.snapshot.takeIf { assetMatchesActive },
+                loading = assetState.loading,
+                error = assetState.error.takeIf { assetMatchesActive },
+                hidden = assetState.hidden,
+                onRefresh = assetController::refresh,
+                onToggleHidden = assetController::toggleHidden,
+                onSwitchAccount = { showSwitchSheet = true },
+                onOpenTickets = { showTicketSheet = true },
+                onReauth = activeAccount?.let { account ->
+                    { onReauthAccount(account.localId) }
+                },
+            )
+        }
+
         item {
             PreferenceGroup(title = "外观") {
                 OverlayDropdownPreference(
@@ -267,7 +301,7 @@ fun SettingsScreen(
     ConfirmDialog(
         show = showLogoutConfirm,
         title = "退出当前账号？",
-        summary = "本机保存的该账号 token 与资料会被删除；若还有其他有效账号会自动切换。",
+        summary = "本机保存的该账号 token、资料、接水历史与资产缓存会被删除；若还有其他有效账号会自动切换。",
         confirmText = "退出",
         destructive = true,
         onConfirm = {
@@ -275,5 +309,25 @@ fun SettingsScreen(
             onLogout()
         },
         onDismiss = { showLogoutConfirm = false },
+    )
+
+    AccountSwitchSheet(
+        show = showSwitchSheet,
+        accounts = accounts,
+        activeLocalId = activeAccount?.localId,
+        onDismiss = { showSwitchSheet = false },
+        onSwitch = onSwitchAccount,
+        onAdd = onAddAccount,
+        onReauth = onReauthAccount,
+        onRename = onRenameAccount,
+        onDelete = onDeleteAccount,
+    )
+
+    TicketAssetSheet(
+        show = showTicketSheet,
+        tickets = assetState.snapshot?.tickets.orEmpty(),
+        ticketsComplete = assetState.snapshot?.ticketsComplete ?: true,
+        loadLogs = assetController::loadLogs,
+        onDismiss = { showTicketSheet = false },
     )
 }

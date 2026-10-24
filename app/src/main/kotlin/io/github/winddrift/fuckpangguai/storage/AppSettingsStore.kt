@@ -59,12 +59,21 @@ class AppSettingsStore(private val context: Context) : SettingsSource {
         context.appDataStore.edit { it[FLOATING_NAV_BAR] = enabled }
     }
 
+    val assetsHidden: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[ASSETS_HIDDEN] ?: false
+    }
+
+    suspend fun setAssetsHidden(enabled: Boolean) {
+        context.appDataStore.edit { it[ASSETS_HIDDEN] = enabled }
+    }
+
     private companion object {
         val ONE_TAP = booleanPreferencesKey("one_tap_unlock")
         val DRY_RUN = booleanPreferencesKey("dry_run")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val FLOATING_NAV_BAR = booleanPreferencesKey("floating_nav_bar")
+        val ASSETS_HIDDEN = booleanPreferencesKey("assets_hidden")
     }
 }
 

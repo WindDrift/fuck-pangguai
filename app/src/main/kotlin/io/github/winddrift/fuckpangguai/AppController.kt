@@ -156,7 +156,6 @@ class AppController(
             _message.value = AppMessage("已切换到 ${displayName(account)}")
             _authCompleted.tryEmit(Unit)
             _accountChanged.tryEmit(Unit)
-            refreshProfileInBackground()
         }
     }
 
@@ -211,7 +210,6 @@ class AppController(
         _state.value = AppState.Ready
         _authCompleted.tryEmit(Unit)
         _accountChanged.tryEmit(Unit)
-        refreshProfileInBackground()
     }
 
     private fun updateStateAfterAccountRemoval(hasActiveSession: Boolean, message: String) {
@@ -254,7 +252,6 @@ class AppController(
                 accountRepository.initialize()
                 if (accountRepository.hasActiveSession()) {
                     _state.value = AppState.Ready
-                    refreshProfileInBackground()
                 } else {
                     val active = accountRepository.activeAccount.value
                     _authTarget.value = if (active != null && active.invalid) {
@@ -271,12 +268,6 @@ class AppController(
                 _message.value = AppMessage(throwable.userMessage(), isError = true)
                 _state.value = AppState.Login
             }
-        }
-    }
-
-    private fun refreshProfileInBackground() {
-        scope.launch {
-            runCatching { accountRepository.refreshProfile() }
         }
     }
 

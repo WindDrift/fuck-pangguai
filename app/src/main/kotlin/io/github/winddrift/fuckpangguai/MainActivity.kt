@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
                     waterSessionManager = graph.waterSessionManager,
                     historyRepository = graph.historyRepository,
                     settingsStore = graph.settingsStore,
+                    assetController = graph.assetController,
                     nfcTagStore = graph.nfcTagStore,
                 )
             }

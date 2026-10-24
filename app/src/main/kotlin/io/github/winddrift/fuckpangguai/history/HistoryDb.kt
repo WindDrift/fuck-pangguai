@@ -174,6 +174,11 @@ class HistoryRepository(
         db.clear(accountId)
     }
 
+    suspend fun clearForAccount(localId: String) = withContext(Dispatchers.IO) {
+        if (localId.isBlank()) return@withContext 0
+        db.clear(localId)
+    }
+
     suspend fun reassignAccount(fromLocalId: String, toLocalId: String) = withContext(Dispatchers.IO) {
         db.reassignAccount(fromLocalId, toLocalId)
     }
