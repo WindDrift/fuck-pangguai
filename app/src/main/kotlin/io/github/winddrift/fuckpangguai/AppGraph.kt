@@ -1,9 +1,11 @@
 package io.github.winddrift.fuckpangguai
 
+import io.github.winddrift.fuckpangguai.account.AccountRepository
 import io.github.winddrift.fuckpangguai.account.AccountStore
-import io.github.winddrift.fuckpangguai.auth.AuthRepository
 import io.github.winddrift.fuckpangguai.net.QiekjApi
 import io.github.winddrift.fuckpangguai.net.RequestLogInterceptor
+import io.github.winddrift.fuckpangguai.net.SessionExpiryInterceptor
+import io.github.winddrift.fuckpangguai.net.SessionExpiryNotifier
 import io.github.winddrift.fuckpangguai.net.SignInterceptor
 import io.github.winddrift.fuckpangguai.storage.DisclaimerStore
 import io.github.winddrift.fuckpangguai.device.DeviceRepository
@@ -39,6 +41,7 @@ class AppGraph(context: Context) {
 
     val accountStore = AccountStore(appContext)
     private val disclaimerStore = DisclaimerStore(appContext)
+    private val sessionExpiryNotifier = SessionExpiryNotifier()
 
     val deviceId: String = run {
         val androidId = Settings.Secure.getString(
@@ -63,6 +66,7 @@ class AppGraph(context: Context) {
                 androidVersion = Build.VERSION.RELEASE.orEmpty(),
             ),
         )
+        .addInterceptor(SessionExpiryInterceptor(sessionExpiryNotifier))
         .apply {
             if (BuildConfig.DEBUG) {
                 addInterceptor(RequestLogInterceptor())
@@ -82,6 +86,7 @@ class AppGraph(context: Context) {
         .build()
 
     val api: QiekjApi = retrofit.create(QiekjApi::class.java)
+    val accountRepository = AccountRepository(api = api, accountStore = accountStore)
 
     val waterRepository = WaterRepository(api)
     val nfcTagStore = NfcTagStore(appContext)
@@ -96,12 +101,12 @@ class AppGraph(context: Context) {
         waterRepository = waterRepository,
     )
 
-    private val authRepository = AuthRepository(api, accountStore)
-
     val controller = AppController(
         scope = scope,
-        authRepository = authRepository,
+        accountRepository = accountRepository,
         disclaimerStore = disclaimerStore,
+        sessionExpiryNotifier = sessionExpiryNotifier,
+        sessionPhaseProvider = { waterSessionStore.session.value?.phase },
     )
 
     val scanController = ScanController(

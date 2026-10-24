@@ -1,6 +1,7 @@
 package io.github.winddrift.fuckpangguai.ui.navigation
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import io.github.winddrift.fuckpangguai.account.AuthTarget
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Recent
@@ -23,4 +24,5 @@ val MainTab.icon: ImageVector
 sealed interface SecondaryPage {
     data class Confirm(val device: ResolvedDevice) : SecondaryPage
     data object Debug : SecondaryPage
+    data class AccountAccess(val target: AuthTarget) : SecondaryPage
 }

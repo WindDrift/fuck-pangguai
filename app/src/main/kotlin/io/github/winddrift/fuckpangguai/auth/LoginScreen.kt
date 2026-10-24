@@ -1,6 +1,7 @@
 package io.github.winddrift.fuckpangguai.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,7 +32,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.github.winddrift.fuckpangguai.BuildConfig
 import io.github.winddrift.fuckpangguai.R
+import io.github.winddrift.fuckpangguai.account.AuthTarget
+import io.github.winddrift.fuckpangguai.account.StoredAccount
+import io.github.winddrift.fuckpangguai.account.displayName
 import io.github.winddrift.fuckpangguai.debug.DebugTokenImportSection
+import io.github.winddrift.fuckpangguai.ui.components.AccountAvatar
+import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -47,10 +54,32 @@ fun LoginScreen(
     onSendCode: (String) -> Unit,
     onLogin: (String, String) -> Unit,
     onImportToken: (String) -> Unit,
+    accounts: List<StoredAccount> = emptyList(),
+    activeLocalId: String? = null,
+    target: AuthTarget = AuthTarget.None,
+    prefillPhone: String = "",
+    onSelectAccount: (StoredAccount) -> Unit = {},
+    onRequestReauth: (StoredAccount) -> Unit = {},
+    onCancel: (() -> Unit)? = null,
 ) {
     val colors = MiuixTheme.colorScheme
     var phone by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(prefillPhone) {
+        if (prefillPhone.isNotBlank()) phone = prefillPhone
+    }
+
+    val title = when (target) {
+        AuthTarget.AddAccount -> "添加账号"
+        is AuthTarget.Reauth -> "重新登录"
+        AuthTarget.None -> stringResource(R.string.app_name)
+    }
+    val subtitle = when (target) {
+        AuthTarget.AddAccount -> "登录另一个胖乖生活账号，当前账号会保留。"
+        is AuthTarget.Reauth -> "该账号的登录已失效，请重新验证手机号。"
+        AuthTarget.None -> "扫码接水，快一点。"
+    }
 
     Column(
         modifier = Modifier
@@ -80,14 +109,48 @@ fun LoginScreen(
                 )
             }
             Text(
-                text = stringResource(R.string.app_name),
+                text = title,
                 style = MiuixTheme.textStyles.title2,
             )
             Text(
-                text = "扫码接水，快一点。",
+                text = subtitle,
                 style = MiuixTheme.textStyles.body1,
                 color = colors.onSurfaceSecondary,
             )
+        }
+
+        if (accounts.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                insideMargin = PaddingValues(0.dp),
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "已保存账号",
+                        style = MiuixTheme.textStyles.title3,
+                    )
+                    Text(
+                        text = "点击有效账号直接切换；失效账号需要重新登录。",
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = colors.onSurfaceSecondary,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                    )
+                    accounts.forEachIndexed { index, account ->
+                        if (index > 0) PreferenceDivider()
+                        SavedAccountRow(
+                            account = account,
+                            active = account.localId == activeLocalId,
+                            onSelect = {
+                                if (account.invalid) {
+                                    onRequestReauth(account)
+                                } else {
+                                    onSelectAccount(account)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
         }
 
         Card(
@@ -99,11 +162,11 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = "手机号登录",
+                    text = if (target is AuthTarget.Reauth) "验证码重新登录" else "手机号登录",
                     style = MiuixTheme.textStyles.title3,
                 )
                 Text(
-                    text = "使用胖乖生活账号登录；本应用只保存加密后的 token。",
+                    text = "账号 token 与手机号仅加密保存在本机。",
                     style = MiuixTheme.textStyles.body2,
                     color = colors.onSurfaceSecondary,
                 )
@@ -139,13 +202,74 @@ fun LoginScreen(
                     enabled = !busy,
                     colors = ButtonDefaults.buttonColorsPrimary(),
                 ) {
-                    Text(if (busy) "处理中…" else "登录")
+                    Text(
+                        when {
+                            busy -> "处理中…"
+                            target is AuthTarget.AddAccount -> "登录并添加"
+                            target is AuthTarget.Reauth -> "重新登录"
+                            else -> "登录"
+                        },
+                    )
+                }
+                if (onCancel != null) {
+                    TextButton(
+                        text = "取消",
+                        onClick = onCancel,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy,
+                    )
                 }
             }
         }
 
         if (BuildConfig.DEBUG) {
             DebugTokenImportSection(onToken = onImportToken)
+        }
+    }
+}
+
+@Composable
+private fun SavedAccountRow(
+    account: StoredAccount,
+    active: Boolean,
+    onSelect: () -> Unit,
+) {
+    val colors = MiuixTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AccountAvatar(
+            name = displayName(account),
+            size = 40.dp,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = displayName(account),
+                style = MiuixTheme.textStyles.body1,
+            )
+            Text(
+                text = account.phoneMasked.ifBlank { "未同步手机号" },
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+        }
+        when {
+            account.invalid -> Text(
+                text = "已失效",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.error,
+            )
+
+            active -> Text(
+                text = "当前",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.primary,
+            )
         }
     }
 }

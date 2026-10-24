@@ -49,6 +49,7 @@ fun SettingsScreen(
     settingsStore: AppSettingsStore,
     historyRepository: HistoryRepository,
     onOpenDebug: () -> Unit,
+    onAddAccount: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -209,8 +210,14 @@ fun SettingsScreen(
         item {
             PreferenceGroup(title = "账号") {
                 ArrowPreference(
-                    title = "退出登录",
-                    summary = "退出后需重新登录才能扫码接水",
+                    title = "添加账号",
+                    summary = "登录另一个胖乖生活账号，当前账号会保留",
+                    onClick = onAddAccount,
+                )
+                PreferenceDivider()
+                ArrowPreference(
+                    title = "退出当前账号",
+                    summary = "删除本机当前账号；若还有其他账号会自动切换",
                     onClick = { showLogoutConfirm = true },
                 )
             }
@@ -259,8 +266,8 @@ fun SettingsScreen(
 
     ConfirmDialog(
         show = showLogoutConfirm,
-        title = "退出登录？",
-        summary = "退出后需要重新登录才能扫码接水。",
+        title = "退出当前账号？",
+        summary = "本机保存的该账号 token 与资料会被删除；若还有其他有效账号会自动切换。",
         confirmText = "退出",
         destructive = true,
         onConfirm = {

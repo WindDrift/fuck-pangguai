@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.AppController
 import io.github.winddrift.fuckpangguai.AppState
+import io.github.winddrift.fuckpangguai.account.AuthTarget
 import io.github.winddrift.fuckpangguai.auth.DisclaimerScreen
 import io.github.winddrift.fuckpangguai.auth.LoginScreen
 import io.github.winddrift.fuckpangguai.confirm.ConfirmController
@@ -96,6 +97,10 @@ fun PangguaiRoot(
     val busy by controller.busy.collectAsStateWithLifecycle()
     val message by controller.message.collectAsStateWithLifecycle()
     val codeSent by controller.codeSent.collectAsStateWithLifecycle()
+    val authTarget by controller.authTarget.collectAsStateWithLifecycle()
+    val reauthPhone by controller.reauthPhone.collectAsStateWithLifecycle()
+    val accounts by controller.accounts.collectAsStateWithLifecycle()
+    val activeAccount by controller.activeAccount.collectAsStateWithLifecycle()
     val activeSession by waterSessionManager.session.collectAsStateWithLifecycle()
     val themeSettings by settingsStore.themeSettings
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
@@ -131,6 +136,21 @@ fun PangguaiRoot(
             secondary = null
             tab = MainTab.Scan
             showEndSessionDialog = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        controller.authCompleted.collect {
+            if (secondary is SecondaryPage.AccountAccess) {
+                secondary = null
+                tab = MainTab.Settings
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        controller.accountChanged.collect {
+            scanController.reset()
         }
     }
 
@@ -192,7 +212,11 @@ fun PangguaiRoot(
     ) {
         when {
             activeSession != null -> requestUsingExit()
-            secondary != null -> secondary = null
+            secondary != null -> {
+                if (secondary is SecondaryPage.AccountAccess) controller.cancelAuth()
+                secondary = null
+            }
+
             tab != MainTab.Scan -> tab = MainTab.Scan
         }
     }
@@ -209,6 +233,9 @@ fun PangguaiRoot(
             state = confirmState,
         )
         currentSecondary is SecondaryPage.Debug -> RootDestination.Debug
+        currentSecondary is SecondaryPage.AccountAccess ->
+            RootDestination.AccountAccess(currentSecondary.target)
+
         tab == MainTab.History -> RootDestination.History
         tab == MainTab.Settings -> RootDestination.Settings
         else -> RootDestination.Scan
@@ -218,6 +245,7 @@ fun PangguaiRoot(
         state != AppState.Ready -> RootTopBar.None
         currentSecondary is SecondaryPage.Confirm -> RootTopBar.Confirm
         currentSecondary is SecondaryPage.Debug -> RootTopBar.Debug
+        currentSecondary is SecondaryPage.AccountAccess -> RootTopBar.AccountAccess
         tab == MainTab.History -> RootTopBar.History
         tab == MainTab.Settings -> RootTopBar.Settings
         else -> RootTopBar.None
@@ -229,6 +257,11 @@ fun PangguaiRoot(
             RootBottomBar.Navigation(floating = themeSettings.floatingNavBar)
         }
         else -> RootBottomBar.None
+    }
+    val accountAccessTitle = when (authTarget) {
+        AuthTarget.AddAccount -> "添加账号"
+        is AuthTarget.Reauth -> "重新登录"
+        AuthTarget.None -> "登录"
     }
 
     CompositionLocalProvider(LocalSnackbar provides snackbar) {
@@ -251,6 +284,14 @@ fun PangguaiRoot(
                         RootTopBar.Using -> AppTopBar("接水状态", onBack = ::requestUsingExit)
                         RootTopBar.Confirm -> AppTopBar("确认设备", onBack = { secondary = null })
                         RootTopBar.Debug -> AppTopBar("诊断", onBack = { secondary = null })
+                        RootTopBar.AccountAccess -> AppTopBar(
+                            accountAccessTitle,
+                            onBack = {
+                                controller.cancelAuth()
+                                secondary = null
+                            },
+                        )
+
                         RootTopBar.History -> AppTopBar("接水记录")
                         RootTopBar.Settings -> AppTopBar("设置")
                     }
@@ -315,6 +356,35 @@ fun PangguaiRoot(
                             onSendCode = controller::sendCode,
                             onLogin = controller::login,
                             onImportToken = controller::importToken,
+                            accounts = accounts,
+                            activeLocalId = activeAccount?.localId,
+                            target = authTarget,
+                            prefillPhone = reauthPhone,
+                            onSelectAccount = { controller.switchAccount(it.localId) },
+                            onRequestReauth = { controller.beginReauth(it.localId) },
+                            onCancel = if (authTarget is AuthTarget.Reauth) {
+                                { controller.cancelAuth() }
+                            } else {
+                                null
+                            },
+                        )
+
+                        is RootDestination.AccountAccess -> LoginScreen(
+                            busy = busy,
+                            codeSent = codeSent,
+                            onSendCode = controller::sendCode,
+                            onLogin = controller::login,
+                            onImportToken = controller::importToken,
+                            accounts = accounts,
+                            activeLocalId = activeAccount?.localId,
+                            target = dest.target,
+                            prefillPhone = reauthPhone,
+                            onSelectAccount = { controller.switchAccount(it.localId) },
+                            onRequestReauth = { controller.beginReauth(it.localId) },
+                            onCancel = {
+                                controller.cancelAuth()
+                                secondary = null
+                            },
                         )
 
                         is RootDestination.Confirm -> ConfirmScreen(
@@ -339,12 +409,11 @@ fun PangguaiRoot(
                             settingsStore = settingsStore,
                             historyRepository = historyRepository,
                             onOpenDebug = { secondary = SecondaryPage.Debug },
-                            onLogout = {
-                                secondary = null
-                                tab = MainTab.Scan
-                                scanController.reset()
-                                controller.logout()
+                            onAddAccount = {
+                                controller.beginAddAccount()
+                                secondary = SecondaryPage.AccountAccess(AuthTarget.AddAccount)
                             },
+                            onLogout = controller::logoutCurrent,
                         )
 
                         RootDestination.Scan -> ScanScreen(
@@ -388,6 +457,10 @@ private sealed interface RootDestination {
         override val tabOrder: Int = 2
     }
     data object Debug : RootDestination
+    data class AccountAccess(val target: AuthTarget) : RootDestination {
+        override val contentKey: Any = "AccountAccess"
+    }
+
     data class Confirm(val device: ResolvedDevice, val state: ConfirmState) : RootDestination {
         override val contentKey: Any = "Confirm"
     }
@@ -401,6 +474,7 @@ private sealed interface RootTopBar {
     data object Using : RootTopBar
     data object Confirm : RootTopBar
     data object Debug : RootTopBar
+    data object AccountAccess : RootTopBar
     data object History : RootTopBar
     data object Settings : RootTopBar
 }
@@ -427,11 +501,17 @@ private fun rootTransition(
         return (fadeIn(PageFadeSpec) + slideInVertically(PageSlideSpec) { it / 5 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutVertically(PageSlideSpec) { -it / 8 })
     }
-    if (target is RootDestination.Confirm || target is RootDestination.Debug) {
+    if (target is RootDestination.Confirm ||
+        target is RootDestination.Debug ||
+        target is RootDestination.AccountAccess
+    ) {
         return (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { it / 4 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { -it / 10 })
     }
-    if (initial is RootDestination.Confirm || initial is RootDestination.Debug) {
+    if (initial is RootDestination.Confirm ||
+        initial is RootDestination.Debug ||
+        initial is RootDestination.AccountAccess
+    ) {
         return (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { -it / 10 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { it / 4 })
     }
