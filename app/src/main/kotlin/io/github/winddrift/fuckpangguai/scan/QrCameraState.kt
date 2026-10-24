@@ -58,11 +58,11 @@ class QrCameraState internal constructor(
         controller.cameraInfo?.let { info ->
             _flashAvailable.value = info.hasFlashUnit()
         }
-        torchObserver = Observer { state ->
+        val observer = Observer<Int> { state ->
             _torchOn.value = state == TorchState.ON
-        }.also { observer ->
-            controller.torchState.observe(lifecycleOwner, observer)
         }
+        torchObserver = observer
+        controller.torchState.observe(lifecycleOwner, observer)
     }
 
     internal fun unbind() {
