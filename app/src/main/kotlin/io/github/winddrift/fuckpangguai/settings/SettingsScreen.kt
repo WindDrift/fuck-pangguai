@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.BuildConfig
@@ -63,6 +64,7 @@ fun SettingsScreen(
     onDeleteAccount: (String) -> Unit,
     onLogout: () -> Unit,
     scrollBehavior: ScrollBehavior? = null,
+    bottomContentPadding: Dp = 0.dp,
 ) {
     val context = LocalContext.current
     val snackbar = LocalSnackbar.current
@@ -137,7 +139,12 @@ fun SettingsScreen(
                     Modifier
                 },
             ),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            top = 12.dp,
+            end = 16.dp,
+            bottom = 12.dp + bottomContentPadding,
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {

@@ -29,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentSlideSpec
@@ -60,6 +61,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 fun HistoryScreen(
     repository: HistoryRepository,
     scrollBehavior: ScrollBehavior? = null,
+    bottomContentPadding: Dp = 0.dp,
 ) {
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
@@ -90,7 +92,12 @@ fun HistoryScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = 12.dp,
+                end = 16.dp,
+                bottom = 12.dp + bottomContentPadding,
+            ),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {

@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -85,6 +86,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun ScanScreen(
     controller: ScanController,
     onDeviceReady: (ResolvedDevice) -> Unit,
+    bottomContentPadding: Dp = 0.dp,
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -234,7 +236,12 @@ fun ScanScreen(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(
+                    start = 24.dp,
+                    top = 20.dp,
+                    end = 24.dp,
+                    bottom = 20.dp + bottomContentPadding,
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

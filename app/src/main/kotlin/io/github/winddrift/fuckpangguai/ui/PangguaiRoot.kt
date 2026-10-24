@@ -3,6 +3,7 @@ package io.github.winddrift.fuckpangguai.ui
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -25,13 +26,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.AppController
@@ -126,6 +131,8 @@ fun PangguaiRoot(
     val historyScrollBehavior = MiuixScrollBehavior()
     val settingsScrollBehavior = MiuixScrollBehavior()
     val debugScrollBehavior = MiuixScrollBehavior()
+    val density = LocalDensity.current
+    var floatingNavHeightPx by remember { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val snackbar = remember(snackbarHostState, scope) {
@@ -287,6 +294,13 @@ fun PangguaiRoot(
         is AuthTarget.Reauth -> "重新登录"
         AuthTarget.None -> "登录"
     }
+    val floatingNavVisible = (bottomBarKind as? RootBottomBar.Navigation)?.floating == true
+    val floatingNavClearance = if (floatingNavVisible && floatingNavHeightPx > 0) {
+        // Miuix 将 floatingToolbar 放在距屏幕底部 4dp 的位置。
+        with(density) { floatingNavHeightPx.toDp() + 4.dp }
+    } else {
+        0.dp
+    }
 
     CompositionLocalProvider(LocalSnackbar provides snackbar) {
         Scaffold(
@@ -367,9 +381,28 @@ fun PangguaiRoot(
                             onUnlock = { confirmController?.unlock() },
                             onBack = { secondary = null },
                         )
-                        is RootBottomBar.Navigation -> MainNavigationBar(
+                        is RootBottomBar.Navigation -> {
+                            if (!bar.floating) {
+                                MainNavigationBar(
+                                    tab = tab,
+                                    floating = false,
+                                    onTabSelected = { tab = it },
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            floatingToolbar = {
+                AnimatedVisibility(
+                    visible = floatingNavVisible,
+                    enter = fadeIn(PageFadeSpec) + slideInVertically(PageSlideSpec) { it / 3 },
+                    exit = fadeOut(PageFadeSpec) + slideOutVertically(PageSlideSpec) { it / 3 },
+                ) {
+                    Box(modifier = Modifier.onSizeChanged { floatingNavHeightPx = it.height }) {
+                        MainNavigationBar(
                             tab = tab,
-                            floating = bar.floating,
+                            floating = true,
                             onTabSelected = { tab = it },
                         )
                     }
@@ -455,6 +488,7 @@ fun PangguaiRoot(
                         RootDestination.History -> HistoryScreen(
                             repository = historyRepository,
                             scrollBehavior = historyScrollBehavior,
+                            bottomContentPadding = floatingNavClearance,
                         )
 
                         RootDestination.Settings -> SettingsScreen(
@@ -477,11 +511,13 @@ fun PangguaiRoot(
                             onDeleteAccount = controller::deleteAccount,
                             onLogout = controller::logoutCurrent,
                             scrollBehavior = settingsScrollBehavior,
+                            bottomContentPadding = floatingNavClearance,
                         )
 
                         RootDestination.Scan -> ScanScreen(
                             controller = scanController,
                             onDeviceReady = { secondary = SecondaryPage.Confirm(it) },
+                            bottomContentPadding = floatingNavClearance,
                         )
                     }
                 }
@@ -595,7 +631,11 @@ private fun MainNavigationBar(
     onTabSelected: (MainTab) -> Unit,
 ) {
     if (floating) {
-        FloatingNavigationBar {
+        FloatingNavigationBar(
+            color = Color.Transparent,
+            showDivider = true,
+            shadowElevation = 0.dp,
+        ) {
             MainTab.entries.forEach { item ->
                 FloatingNavigationBarItem(
                     selected = tab == item,
