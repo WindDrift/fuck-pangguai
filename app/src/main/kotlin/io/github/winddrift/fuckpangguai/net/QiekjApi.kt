@@ -3,12 +3,17 @@ package io.github.winddrift.fuckpangguai.net
 import io.github.winddrift.fuckpangguai.net.dto.AfterPay
 import io.github.winddrift.fuckpangguai.net.dto.ApiResponse
 import io.github.winddrift.fuckpangguai.net.dto.GoodsDetail
+import io.github.winddrift.fuckpangguai.net.dto.ItemsList
 import io.github.winddrift.fuckpangguai.net.dto.LoginBean
 import io.github.winddrift.fuckpangguai.net.dto.MsgSyncBean
 import io.github.winddrift.fuckpangguai.net.dto.PayChannelRoute
 import io.github.winddrift.fuckpangguai.net.dto.ScanV2Bean
 import io.github.winddrift.fuckpangguai.net.dto.Sku
+import io.github.winddrift.fuckpangguai.net.dto.Ticket
+import io.github.winddrift.fuckpangguai.net.dto.TicketLog
 import io.github.winddrift.fuckpangguai.net.dto.Unlock
+import io.github.winddrift.fuckpangguai.net.dto.UserBalance
+import io.github.winddrift.fuckpangguai.net.dto.UserProfile
 import io.github.winddrift.fuckpangguai.net.dto.WaterSync
 import kotlinx.serialization.json.JsonElement
 import retrofit2.http.FieldMap
@@ -80,4 +85,20 @@ interface QiekjApi {
     @FormUrlEncoded
     @POST("order/pay_status")
     suspend fun orderPayStatus(@FieldMap body: Map<String, String>): ApiResponse<Boolean>
+
+    @FormUrlEncoded
+    @POST("user/info")
+    suspend fun userInfo(@FieldMap body: Map<String, String>): ApiResponse<UserProfile>
+
+    @FormUrlEncoded
+    @POST("user/balance")
+    suspend fun userBalance(@FieldMap body: Map<String, String>): ApiResponse<UserBalance>
+
+    @FormUrlEncoded
+    @POST("tokenCoin/userTokenCoins")
+    suspend fun userTokenCoins(@FieldMap body: Map<String, String>): ApiResponse<ItemsList<Ticket>>
+
+    @FormUrlEncoded
+    @POST("tokenCoin/userTokenCoinLogs")
+    suspend fun userTokenCoinLogs(@FieldMap body: Map<String, String>): ApiResponse<ItemsList<TicketLog>>
 }

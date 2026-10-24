@@ -2,6 +2,11 @@ package io.github.winddrift.fuckpangguai.net
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Interceptor
@@ -30,6 +35,44 @@ data class RequestLogEntry(
     private fun shellQuote(value: String): String =
         "'" + value.replace("'", "'''") + "'"
 }
+
+private val logJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+internal fun redactResponseBody(body: String): String {
+    if (body.isBlank()) return body
+    return runCatching {
+        redactJsonElement(logJson.parseToJsonElement(body)).toString()
+    }.getOrDefault(body)
+}
+
+private fun redactJsonElement(element: JsonElement): JsonElement = when (element) {
+    is JsonObject -> JsonObject(
+        element.mapValues { (key, value) ->
+            if (key.lowercase() in SENSITIVE_RESPONSE_FIELDS) {
+                JsonPrimitive("<redacted>")
+            } else {
+                redactJsonElement(value)
+            }
+        },
+    )
+
+    is JsonArray -> JsonArray(element.map(::redactJsonElement))
+    else -> element
+}
+
+private val SENSITIVE_RESPONSE_FIELDS = setOf(
+    "token",
+    "phone",
+    "operatorphone",
+    "realname",
+    "idcardno",
+    "headimageid",
+    "mobtoken",
+    "moboptoken",
+    "alipayaccount",
+    "unionid",
+    "openid",
+)
 
 object RequestLog {
     private const val MAX_ENTRIES = 100
@@ -68,9 +111,11 @@ class RequestLogInterceptor : Interceptor {
                     durationMs = duration,
                     requestHeaders = redactHeaders(request.headers),
                     requestBody = redactForm(requestBody),
-                    responseBody = runCatching {
-                        response?.peekBody(MAX_RESPONSE_BYTES)?.string().orEmpty()
-                    }.getOrDefault(""),
+                    responseBody = redactResponseBody(
+                        runCatching {
+                            response?.peekBody(MAX_RESPONSE_BYTES)?.string().orEmpty()
+                        }.getOrDefault(""),
+                    ),
                     error = error,
                 ),
             )
