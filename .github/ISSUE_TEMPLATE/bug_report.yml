@@ -1,0 +1,105 @@
+name: 缺陷报告
+description: 报告可复现的崩溃、错误或异常行为
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先阅读[常见问题](https://github.com/WindDrift/fuck-pangguai/blob/master/docs/faq.md)并搜索已有 Issue。
+
+        请勿上传凭据、token、手机号、订单号、完整设备标识、位置坐标或未脱敏截图。
+
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 设置页显示的 versionName（versionCode）
+      placeholder: 1.1.0-abc1234（3）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build_type
+    attributes:
+      label: 构建类型
+      options:
+        - GitHub Release APK
+        - 自行构建 Debug
+        - 自行构建 Release
+        - 不确定
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备与系统
+      description: 手机型号与 Android 版本
+      placeholder: 例如 Pixel 8 / Android 15
+    validations:
+      required: true
+
+  - type: dropdown
+    id: flow
+    attributes:
+      label: 出问题的流程
+      options:
+        - 登录
+        - 扫码
+        - 相册识别
+        - 手动输入
+        - NFC
+        - 确认与解锁
+        - 接水与结算
+        - 历史与导出
+        - 设置与主题
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请写出最小、可重复的操作步骤
+      placeholder: |
+        1. 打开应用并登录
+        2. 扫描某设备二维码
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 如有错误提示，请粘贴脱敏后的文本
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏日志（可选）
+      description: 请删除手机号、token、订单号、设备完整标识、位置与响应中的隐私信息
+      render: shell
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 确认
+      options:
+        - label: 已搜索常见问题与现有 Issue
+          required: true
+        - label: 未上传任何凭据、token、手机号、订单号或未脱敏日志
+          required: true
+        - label: 使用的是本仓库构建的版本，而非第三方重打包版本
+          required: true

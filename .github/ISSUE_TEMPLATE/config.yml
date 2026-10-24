@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用与构建文档
+    url: https://github.com/WindDrift/fuck-pangguai/tree/master/docs
+    about: 安装、登录、扫码、构建与常见问题
+  - name: 隐私说明
+    url: https://github.com/WindDrift/fuck-pangguai/blob/master/docs/privacy.md
+    about: 权限、数据保存位置与网络行为
+  - name: 最新版本
+    url: https://github.com/WindDrift/fuck-pangguai/releases
+    about: 下载公开版本并查看更新说明
