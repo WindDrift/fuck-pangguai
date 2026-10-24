@@ -64,8 +64,8 @@ android {
         applicationId = "io.github.winddrift.fuckpangguai"
         minSdk = 31
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.0.0-1b19ef7"
+        versionCode = 3
+        versionName = "1.1.0-eb7e057"
 
         buildConfigField("String", "QIEKJ_APP_SECRET", buildConfigString(qiekjAppSecret))
         buildConfigField("String", "QIEKJ_LOCATION_SECRET", buildConfigString(qiekjLocationSecret))
