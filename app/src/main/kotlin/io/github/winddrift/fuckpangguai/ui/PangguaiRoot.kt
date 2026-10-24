@@ -105,6 +105,7 @@ fun PangguaiRoot(
     assetController: AssetController,
     pointsController: PointsController,
     nfcTagStore: NfcTagStore,
+    onWarmUpLocation: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val state by controller.state.collectAsStateWithLifecycle()
@@ -570,6 +571,7 @@ fun PangguaiRoot(
                             controller = scanController,
                             onDeviceReady = { secondary = SecondaryPage.Confirm(it) },
                             bottomContentPadding = floatingNavClearance,
+                            onWarmUpLocation = onWarmUpLocation,
                         )
                     }
                 }

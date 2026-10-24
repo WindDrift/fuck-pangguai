@@ -154,11 +154,13 @@ class AppGraph(context: Context) {
         nfcTagStore = nfcTagStore,
     )
 
+    val locationProvider = LocationProvider(appContext)
+
     fun newConfirmController(): ConfirmController = ConfirmController(
         scope = scope,
         deviceRepository = DeviceRepository(api),
         waterRepository = waterRepository,
-        locationProvider = LocationProvider(appContext),
+        locationProvider = locationProvider,
         settingsStore = settingsStore,
         configStore = deviceConfigStore,
     )

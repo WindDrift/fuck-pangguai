@@ -87,6 +87,7 @@ fun ScanScreen(
     controller: ScanController,
     onDeviceReady: (ResolvedDevice) -> Unit,
     bottomContentPadding: Dp = 0.dp,
+    onWarmUpLocation: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -127,6 +128,10 @@ fun ScanScreen(
         if (!hasCameraPermission) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
+    }
+
+    LaunchedEffect(Unit) {
+        onWarmUpLocation()
     }
 
     DisposableEffect(lifecycleOwner, context) {
