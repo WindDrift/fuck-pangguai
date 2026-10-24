@@ -33,6 +33,15 @@ sealed interface ScanState {
     ) : ScanState
 }
 
+/**
+ * 相机识别结果是否应该交给控制器。
+ *
+ * NeedsBind 本身就是要求用户扫设备码来完成 NFC 标签绑定，不能在此状态停用相机；
+ * 其余非 Idle 状态已经有结果或正在请求，继续扫码只会重复触发。
+ */
+internal fun ScanState.acceptsCameraScan(): Boolean =
+    this is ScanState.Idle || this is ScanState.NeedsBind
+
 class ScanController(
     private val scope: CoroutineScope,
     private val deviceRepository: DeviceRepository,
