@@ -1,16 +1,11 @@
 package io.github.winddrift.fuckpangguai.scan
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
-import androidx.camera.view.CameraController
-import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,41 +20,24 @@ import kotlin.math.roundToInt
 
 @Composable
 fun QrCameraPreview(
+    cameraState: QrCameraState,
     onQr: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnQr = rememberUpdatedState(onQr)
-    val executor = remember { Executors.newSingleThreadExecutor() }
-    val analyzer = remember {
+    val executor = remember(cameraState) { Executors.newSingleThreadExecutor() }
+    val analyzer = remember(cameraState) {
         QrAnalyzer { value -> latestOnQr.value(value) }
     }
-    val controller = remember {
-        LifecycleCameraController(context).apply {
-            setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
-            setImageAnalysisBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            // 640×480 对稍远或较小的设备码不够，720p 明显更容易识别。
-            setImageAnalysisResolutionSelector(
-                ResolutionSelector.Builder()
-                    .setResolutionStrategy(
-                        ResolutionStrategy(
-                            Size(1280, 720),
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
-                        ),
-                    )
-                    .build(),
-            )
-        }
-    }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    DisposableEffect(lifecycleOwner, controller, executor, analyzer) {
-        controller.bindToLifecycle(lifecycleOwner)
-        controller.setImageAnalysisAnalyzer(executor, analyzer)
+    DisposableEffect(lifecycleOwner, cameraState, executor, analyzer) {
+        cameraState.bind()
+        cameraState.controller.setImageAnalysisAnalyzer(executor, analyzer)
         onDispose {
-            controller.clearImageAnalysisAnalyzer()
-            controller.unbind()
+            cameraState.controller.clearImageAnalysisAnalyzer()
             executor.shutdown()
+            cameraState.unbind()
         }
     }
 
@@ -68,7 +46,7 @@ fun QrCameraPreview(
         factory = { viewContext ->
             PreviewView(viewContext).apply {
                 scaleType = PreviewView.ScaleType.FILL_CENTER
-                this.controller = controller
+                controller = cameraState.controller
             }
         },
     )
@@ -141,7 +119,7 @@ object QrImageDecoder {
     /** 手机照片动辄几十兆像素，直接全尺寸解码容易 OOM，也超出 ZXing 的最佳范围。 */
     private const val MAX_EDGE = 2048
 
-    fun decode(context: Context, uri: Uri): String? {
+    fun decode(context: android.content.Context, uri: Uri): String? {
         val bitmap = loadBitmap(context, uri) ?: return null
         return try {
             val width = bitmap.width
@@ -157,7 +135,7 @@ object QrImageDecoder {
         }
     }
 
-    private fun loadBitmap(context: Context, uri: Uri): Bitmap? =
+    private fun loadBitmap(context: android.content.Context, uri: Uri): Bitmap? =
         try {
             val source = ImageDecoder.createSource(context.contentResolver, uri)
             ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
