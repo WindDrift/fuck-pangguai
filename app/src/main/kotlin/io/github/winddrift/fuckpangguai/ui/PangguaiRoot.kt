@@ -241,11 +241,7 @@ fun PangguaiRoot(
                     .padding(innerPadding),
             ) {
                 when {
-                    session != null -> UsingScreen(
-                        session = session,
-                        onEnd = waterSessionManager::end,
-                        onDone = waterSessionManager::clear,
-                    )
+                    session != null -> UsingScreen(session = session)
 
                     state == AppState.Loading -> LoadingScreen()
 
