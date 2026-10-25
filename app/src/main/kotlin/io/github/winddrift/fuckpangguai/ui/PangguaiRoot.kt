@@ -63,6 +63,8 @@ import io.github.winddrift.fuckpangguai.settings.SettingsScreen
 import io.github.winddrift.fuckpangguai.settings.TicketsScreen
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
 import io.github.winddrift.fuckpangguai.storage.ThemeSettings
+import io.github.winddrift.fuckpangguai.ticket.TicketRechargeController
+import io.github.winddrift.fuckpangguai.ticket.TicketRechargeScreen
 import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentSlideSpec
 import io.github.winddrift.fuckpangguai.ui.animation.PageFadeSpec
@@ -107,6 +109,7 @@ fun PangguaiRoot(
     settingsStore: AppSettingsStore,
     assetController: AssetController,
     pointsController: PointsController,
+    ticketRechargeController: TicketRechargeController,
     nfcTagStore: NfcTagStore,
     onWarmUpLocation: () -> Unit = {},
 ) {
@@ -237,6 +240,10 @@ fun PangguaiRoot(
                 secondary = if (page.shopId.isBlank()) null else SecondaryPage.Tickets()
             }
 
+            is SecondaryPage.TicketRecharge -> {
+                secondary = SecondaryPage.Tickets(page.shopId, page.shopName)
+            }
+
             is SecondaryPage.AccountAccess -> {
                 controller.cancelAuth()
                 secondary = null
@@ -276,6 +283,9 @@ fun PangguaiRoot(
         currentSecondary is SecondaryPage.Tickets ->
             RootDestination.Tickets(currentSecondary.shopId, currentSecondary.shopName)
 
+        currentSecondary is SecondaryPage.TicketRecharge ->
+            RootDestination.TicketRecharge(currentSecondary.shopId, currentSecondary.shopName)
+
         tab == MainTab.History -> RootDestination.History
         tab == MainTab.Points -> RootDestination.Points
         tab == MainTab.Settings -> RootDestination.Settings
@@ -308,6 +318,7 @@ fun PangguaiRoot(
         currentSecondary is SecondaryPage.Debug -> RootTopBar.Debug
         currentSecondary is SecondaryPage.AccountAccess -> RootTopBar.AccountAccess
         currentSecondary is SecondaryPage.Tickets -> RootTopBar.Tickets
+        currentSecondary is SecondaryPage.TicketRecharge -> RootTopBar.TicketRecharge
         tab == MainTab.History -> RootTopBar.History
         tab == MainTab.Points -> RootTopBar.Points
         tab == MainTab.Settings -> RootTopBar.Settings
@@ -382,6 +393,11 @@ fun PangguaiRoot(
                         )
                         RootTopBar.Tickets -> AppTopBar(
                             ticketTitle,
+                            onBack = ::closeSecondary,
+                        )
+
+                        RootTopBar.TicketRecharge -> AppTopBar(
+                            "充值通用小票",
                             onBack = ::closeSecondary,
                         )
 
@@ -495,9 +511,20 @@ fun PangguaiRoot(
                         is RootDestination.Tickets -> TicketsScreen(
                             assetController = assetController,
                             shopId = dest.shopId,
+                            shopName = dest.shopName,
                             onSelectShop = { ticket ->
                                 secondary = SecondaryPage.Tickets(ticket.shopId, ticket.shopName)
                             },
+                            onRecharge = { shopId, shopName ->
+                                secondary = SecondaryPage.TicketRecharge(shopId, shopName)
+                            },
+                        )
+
+                        is RootDestination.TicketRecharge -> TicketRechargeScreen(
+                            controller = ticketRechargeController,
+                            shopId = dest.shopId,
+                            shopName = dest.shopName,
+                            onClose = ::closeSecondary,
                         )
 
                         is RootDestination.AccountAccess -> LoginScreen(
@@ -629,6 +656,10 @@ private sealed interface RootDestination {
         override val contentKey: Any = "Tickets-$shopId"
     }
 
+    data class TicketRecharge(val shopId: String, val shopName: String) : RootDestination {
+        override val contentKey: Any = "TicketRecharge-$shopId"
+    }
+
     data class Confirm(val device: ResolvedDevice, val state: ConfirmState) : RootDestination {
         override val contentKey: Any = "Confirm"
     }
@@ -644,6 +675,7 @@ private sealed interface RootTopBar {
     data object Debug : RootTopBar
     data object AccountAccess : RootTopBar
     data object Tickets : RootTopBar
+    data object TicketRecharge : RootTopBar
     data object History : RootTopBar
     data object Points : RootTopBar
     data object Settings : RootTopBar
@@ -671,6 +703,17 @@ private fun rootTransition(
         return (fadeIn(PageFadeSpec) + slideInVertically(PageSlideSpec) { it / 5 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutVertically(PageSlideSpec) { -it / 8 })
     }
+    if ((initial is RootDestination.TicketRecharge && target is RootDestination.Tickets) ||
+        (initial is RootDestination.Tickets && target is RootDestination.TicketRecharge)
+    ) {
+        return if (target is RootDestination.TicketRecharge) {
+            (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { it / 4 }) togetherWith
+                (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { -it / 10 })
+        } else {
+            (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { -it / 10 }) togetherWith
+                (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { it / 4 })
+        }
+    }
     if (initial is RootDestination.Tickets && target is RootDestination.Tickets) {
         val forward = initial.shopId.isBlank() && target.shopId.isNotBlank()
         return if (forward) {
@@ -684,7 +727,8 @@ private fun rootTransition(
     if (target is RootDestination.Confirm ||
         target is RootDestination.Debug ||
         target is RootDestination.AccountAccess ||
-        target is RootDestination.Tickets
+        target is RootDestination.Tickets ||
+        target is RootDestination.TicketRecharge
     ) {
         return (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { it / 4 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { -it / 10 })
@@ -692,7 +736,8 @@ private fun rootTransition(
     if (initial is RootDestination.Confirm ||
         initial is RootDestination.Debug ||
         initial is RootDestination.AccountAccess ||
-        initial is RootDestination.Tickets
+        initial is RootDestination.Tickets ||
+        initial is RootDestination.TicketRecharge
     ) {
         return (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { -it / 10 }) togetherWith
             (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { it / 4 })

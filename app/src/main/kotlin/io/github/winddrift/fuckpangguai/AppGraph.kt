@@ -11,6 +11,10 @@ import io.github.winddrift.fuckpangguai.net.SessionExpiryInterceptor
 import io.github.winddrift.fuckpangguai.net.SessionExpiryNotifier
 import io.github.winddrift.fuckpangguai.net.SignInterceptor
 import io.github.winddrift.fuckpangguai.storage.DisclaimerStore
+import io.github.winddrift.fuckpangguai.ticket.AccountStoreTicketSource
+import io.github.winddrift.fuckpangguai.ticket.DataStorePendingRechargeStore
+import io.github.winddrift.fuckpangguai.ticket.QiekjTicketRechargeRepository
+import io.github.winddrift.fuckpangguai.ticket.TicketRechargeController
 import io.github.winddrift.fuckpangguai.device.DeviceRepository
 import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
 import io.github.winddrift.fuckpangguai.points.AccountStorePointsSource
@@ -52,6 +56,7 @@ class AppGraph(context: Context) {
 
     val accountStore = AccountStore(appContext)
     val assetSnapshotStore = AssetSnapshotStore(appContext)
+    private val pendingRechargeStore = DataStorePendingRechargeStore(appContext)
     val historyRepository = HistoryRepository(appContext, accountStore)
     private val disclaimerStore = DisclaimerStore(appContext)
     private val sessionExpiryNotifier = SessionExpiryNotifier()
@@ -112,6 +117,7 @@ class AppGraph(context: Context) {
         onAccountDeleted = { localId ->
             assetSnapshotStore.delete(localId)
             deviceRepository.clearAccountCache(localId)
+            pendingRechargeStore.clear(localId)
         },
     )
 
@@ -134,6 +140,13 @@ class AppGraph(context: Context) {
         scope = scope,
         historyRepository = historyRepository,
         billRepository = BillRepository(api),
+    )
+    val ticketRechargeController = TicketRechargeController(
+        scope = scope,
+        dataSource = QiekjTicketRechargeRepository(api),
+        pendingStore = pendingRechargeStore,
+        accountSource = AccountStoreTicketSource(accountStore),
+        onPaid = assetController::refresh,
     )
 
     val pointsController = PointsController(

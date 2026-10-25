@@ -29,4 +29,5 @@ sealed interface SecondaryPage {
     data object Debug : SecondaryPage
     data class AccountAccess(val target: AuthTarget) : SecondaryPage
     data class Tickets(val shopId: String = "", val shopName: String = "") : SecondaryPage
+    data class TicketRecharge(val shopId: String, val shopName: String) : SecondaryPage
 }

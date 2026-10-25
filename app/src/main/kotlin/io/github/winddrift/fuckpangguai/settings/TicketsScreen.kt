@@ -39,6 +39,7 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Promotions
@@ -48,17 +49,22 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun TicketsScreen(
     assetController: AssetController,
     shopId: String,
+    shopName: String,
     onSelectShop: (Ticket) -> Unit,
+    onRecharge: (String, String) -> Unit,
 ) {
     if (shopId.isBlank()) {
         TicketShopList(
             assetController = assetController,
             onSelectShop = onSelectShop,
+            onRecharge = onRecharge,
         )
     } else {
         TicketLogList(
             assetController = assetController,
             shopId = shopId,
+            shopName = shopName,
+            onRecharge = onRecharge,
         )
     }
 }
@@ -67,6 +73,7 @@ fun TicketsScreen(
 private fun TicketShopList(
     assetController: AssetController,
     onSelectShop: (Ticket) -> Unit,
+    onRecharge: (String, String) -> Unit,
 ) {
     val state by assetController.state.collectAsStateWithLifecycle()
     val colors = MiuixTheme.colorScheme
@@ -125,7 +132,11 @@ private fun TicketShopList(
 
             else -> {
                 items(tickets) { ticket ->
-                    TicketShopCard(ticket = ticket, onClick = { onSelectShop(ticket) })
+                    TicketShopCard(
+                        ticket = ticket,
+                        onClick = { onSelectShop(ticket) },
+                        onRecharge = { onRecharge(ticket.shopId, ticket.shopName) },
+                    )
                 }
                 if (state.snapshot?.ticketsComplete == false) {
                     item {
@@ -154,6 +165,7 @@ private fun TicketShopList(
 private fun TicketShopCard(
     ticket: Ticket,
     onClick: () -> Unit,
+    onRecharge: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
     Card(insideMargin = PaddingValues(0.dp)) {
@@ -188,6 +200,11 @@ private fun TicketShopCard(
                     color = colors.onSurfaceSecondary,
                 )
             }
+            TextButton(
+                text = "充值",
+                onClick = onRecharge,
+                enabled = ticket.shopId.isNotBlank(),
+            )
             Icon(
                 imageVector = MiuixIcons.ChevronForward,
                 contentDescription = null,
@@ -201,9 +218,13 @@ private fun TicketShopCard(
 private fun TicketLogList(
     assetController: AssetController,
     shopId: String,
+    shopName: String,
+    onRecharge: (String, String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val colors = MiuixTheme.colorScheme
+    val assetState by assetController.state.collectAsStateWithLifecycle()
+    val refreshedAt = assetState.snapshot?.fetchedAt
     var logs by remember(shopId) { mutableStateOf<List<TicketLog>>(emptyList()) }
     var total by remember(shopId) { mutableIntStateOf(0) }
     var page by remember(shopId) { mutableIntStateOf(0) }
@@ -241,7 +262,7 @@ private fun TicketLogList(
         load(1)
     }
 
-    LaunchedEffect(shopId) {
+    LaunchedEffect(shopId, refreshedAt) {
         logs = emptyList()
         total = 0
         page = 0
@@ -259,15 +280,25 @@ private fun TicketLogList(
     ) {
         item {
             SectionCard(title = "小票流水") {
-                Text(
-                    text = when {
-                        total > 0 -> "共 $total 条流水"
-                        loading -> "正在加载流水…"
-                        else -> "暂无流水"
-                    },
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = colors.onSurfaceSecondary,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = when {
+                            total > 0 -> "共 $total 条流水"
+                            loading -> "正在加载流水…"
+                            else -> "暂无流水"
+                        },
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = colors.onSurfaceSecondary,
+                    )
+                    TextButton(
+                        text = "充值",
+                        onClick = { onRecharge(shopId, shopName) },
+                    )
+                }
             }
         }
 
