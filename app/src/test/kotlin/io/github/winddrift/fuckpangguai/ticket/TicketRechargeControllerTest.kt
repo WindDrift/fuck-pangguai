@@ -180,6 +180,28 @@ class TicketRechargeControllerTest {
     }
 
     @Test
+    fun `existing prepay checks server status before launching alipay`() = runTest {
+        val deps = Deps()
+        deps.data.prePay = PrePay(
+            exist = true,
+            prepayParam = "ORDER-INFO",
+        )
+        deps.data.payStatusResponses.add(true)
+        val controller = deps.controller(this)
+        controller.start("shop1", "一号店")
+        advanceUntilIdle()
+        controller.createOrder()
+        advanceUntilIdle()
+
+        controller.pay(deps.gateway)
+        advanceUntilIdle()
+
+        assertEquals(RechargeStage.Paid, controller.state.value.stage)
+        assertEquals(0, deps.gateway.calls)
+        assertEquals(1, deps.onPaidCalls)
+    }
+
+    @Test
     fun `6001 with paid status marks paid`() = runTest {
         val deps = Deps()
         deps.gateway.outcome = AlipayOutcome("6001")

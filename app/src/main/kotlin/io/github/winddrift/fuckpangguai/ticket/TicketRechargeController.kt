@@ -385,19 +385,22 @@ class TicketRechargeController(
                     return@launch
                 }
                 if (!isCurrent(gen, localId)) return@launch
-                if (prePay.prepayParam.isBlank()) {
+                if (prePay.prepayParam.isBlank() || prePay.exist) {
                     val paid = queryPayStatus(gen, localId, current.orderNo, attempts = 1)
                     if (!isCurrent(gen, localId)) return@launch
-                    if (paid) markPaid(gen, localId, detail.orderStatus)
-                    else {
+                    if (paid) {
+                        markPaid(gen, localId, detail.orderStatus)
+                        return@launch
+                    }
+                    if (prePay.prepayParam.isBlank()) {
                         _state.update {
                             it.copy(
                                 stage = RechargeStage.Unknown,
                                 message = "未获取到支付宝支付参数，请勿重复支付；可重新查询状态",
                             )
                         }
+                        return@launch
                     }
-                    return@launch
                 }
 
                 pendingOrderInfo = prePay.prepayParam
