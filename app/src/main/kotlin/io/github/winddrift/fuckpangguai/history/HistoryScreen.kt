@@ -84,6 +84,9 @@ fun HistoryScreen(
     val visibleRecords = remember(state.records, state.filter) {
         state.records.applyHistoryFilter(state.filter, System.currentTimeMillis())
     }
+    val summary = remember(visibleRecords) {
+        visibleRecords.summarizeHistory()
+    }
     val deviceOptions = remember(state.records) {
         state.records.map { it.deviceName }
             .distinct()
@@ -129,6 +132,13 @@ fun HistoryScreen(
                     controller.updateFilter { it.removeChip(chip) }
                 },
             )
+
+            if (visibleRecords.isNotEmpty()) {
+                HistorySummaryCard(
+                    summary = summary,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
+                )
+            }
 
             LazyColumn(
                 modifier = Modifier
