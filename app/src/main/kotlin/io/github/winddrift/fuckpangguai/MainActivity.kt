@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
                     newConfirmController = graph::newConfirmController,
                     waterSessionManager = graph.waterSessionManager,
                     historyRepository = graph.historyRepository,
+                    historyController = graph.historyController,
                     settingsStore = graph.settingsStore,
                     assetController = graph.assetController,
                     pointsController = graph.pointsController,

@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,8 +31,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentSlideSpec
 import io.github.winddrift.fuckpangguai.ui.animation.PageSlideSpec
@@ -39,6 +43,7 @@ import io.github.winddrift.fuckpangguai.ui.components.EmptyState
 import io.github.winddrift.fuckpangguai.ui.components.KeyValueRow
 import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
 import io.github.winddrift.fuckpangguai.ui.components.PhaseBadge
+import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
 import io.github.winddrift.fuckpangguai.ui.format.sessionPhaseLabel
 import kotlinx.coroutines.launch
@@ -50,6 +55,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Recent
@@ -59,35 +65,38 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 fun HistoryScreen(
-    repository: HistoryRepository,
+    controller: HistoryController,
+    accountId: String?,
     scrollBehavior: ScrollBehavior? = null,
     bottomContentPadding: Dp = 0.dp,
 ) {
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
     val colors = MiuixTheme.colorScheme
-    var records by remember { mutableStateOf<List<HistoryRecord>>(emptyList()) }
-    var refreshing by remember { mutableStateOf(false) }
-    var selectedRecord by remember { mutableStateOf<HistoryRecord?>(null) }
-    var pendingDelete by remember { mutableStateOf<HistoryRecord?>(null) }
+    val state by controller.state.collectAsStateWithLifecycle()
+    var selectedId by remember { mutableStateOf<Long?>(null) }
+    var pendingDeleteId by remember { mutableStateOf<Long?>(null) }
 
-    fun refresh() {
-        scope.launch {
-            refreshing = true
-            runCatching { repository.list() }
-                .onSuccess { records = it }
-                .onFailure { snackbar.show("读取记录失败", isError = true) }
-            refreshing = false
-        }
+    val selectedRecord = state.records.firstOrNull { it.id == selectedId }
+    val pendingDelete = state.records.firstOrNull { it.id == pendingDeleteId }
+
+    LaunchedEffect(accountId) {
+        controller.refresh(accountId)
     }
 
-    LaunchedEffect(Unit) { refresh() }
+    LaunchedEffect(selectedId) {
+        selectedId?.let(controller::ensureBill)
+    }
 
-    BackHandler(enabled = selectedRecord != null) { selectedRecord = null }
+    LaunchedEffect(selectedId, state.records) {
+        if (selectedId != null && selectedRecord == null) selectedId = null
+    }
+
+    BackHandler(enabled = selectedId != null) { selectedId = null }
 
     PullToRefresh(
-        isRefreshing = refreshing,
-        onRefresh = ::refresh,
+        isRefreshing = state.loading || state.syncing,
+        onRefresh = { controller.refresh(accountId, includeOld = true) },
         topAppBarScrollBehavior = scrollBehavior,
     ) {
         LazyColumn(
@@ -101,47 +110,90 @@ fun HistoryScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
-                AnimatedContent(
-                    targetState = records.size,
-                    transitionSpec = {
-                        (fadeIn(ContentFadeSpec) + slideInVertically(ContentSlideSpec) { it / 2 }) togetherWith
-                            (fadeOut(ContentFadeSpec) + slideOutVertically(ContentSlideSpec) { -it / 2 })
-                    },
-                    label = "historyCount",
-                ) { count ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    AnimatedContent(
+                        targetState = state.records.size,
+                        transitionSpec = {
+                            (fadeIn(ContentFadeSpec) + slideInVertically(ContentSlideSpec) { it / 2 }) togetherWith
+                                (fadeOut(ContentFadeSpec) + slideOutVertically(ContentSlideSpec) { -it / 2 })
+                        },
+                        label = "historyCount",
+                    ) { count ->
+                        Text(
+                            text = "共 $count 条",
+                            style = MiuixTheme.textStyles.body1,
+                        )
+                    }
+                    when {
+                        state.syncing -> Text(
+                            text = "正在同步账单…",
+                            style = MiuixTheme.textStyles.footnote1,
+                            color = colors.onSurfaceSecondary,
+                        )
+                        state.pendingBillCount > 0 -> Text(
+                            text = "还有 ${state.pendingBillCount} 条账单待同步，下拉继续",
+                            style = MiuixTheme.textStyles.footnote1,
+                            color = colors.onSurfaceSecondary,
+                        )
+                    }
+                    state.error?.let { message ->
+                        Text(
+                            text = message,
+                            style = MiuixTheme.textStyles.footnote1,
+                            color = colors.error,
+                        )
+                    }
+                }
+            }
+
+            if (state.loading && state.records.isEmpty()) {
+                item {
                     Text(
-                        text = "共 $count 条",
-                        style = MiuixTheme.textStyles.body1,
+                        text = "正在读取记录…",
+                        style = MiuixTheme.textStyles.body2,
+                        color = colors.onSurfaceSecondary,
                     )
+                }
+            } else {
+                item {
+                    AnimatedVisibility(
+                        visible = state.records.isEmpty(),
+                        enter = fadeIn(ContentFadeSpec),
+                        exit = fadeOut(ContentFadeSpec),
+                    ) {
+                        EmptyState(
+                            icon = MiuixIcons.Recent,
+                            title = "还没有接水记录",
+                            summary = "扫码接水后，这里会显示记录并自动匹配账单；下拉可刷新。",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
 
-            item {
-                AnimatedVisibility(
-                    visible = records.isEmpty(),
-                    enter = fadeIn(ContentFadeSpec),
-                    exit = fadeOut(ContentFadeSpec),
-                ) {
-                    EmptyState(
-                        icon = MiuixIcons.Recent,
-                        title = "还没有接水记录",
-                        summary = "扫码接水后，这里会显示记录；下拉可刷新。",
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-
-            items(records, key = { it.id }) { record ->
+            items(state.records, key = { it.id }) { record ->
                 HistoryCard(
                     record = record,
+                    syncing = state.syncingIds.contains(record.id),
                     modifier = Modifier.animateItem(
                         fadeInSpec = ContentFadeSpec,
                         placementSpec = PageSlideSpec,
                         fadeOutSpec = ContentFadeSpec,
                     ),
-                    onClick = { selectedRecord = record },
-                    onDelete = { pendingDelete = record },
+                    onClick = { selectedId = record.id },
+                    onDelete = { pendingDeleteId = record.id },
+                    onRetryBill = { controller.retryBill(record.id) },
                 )
+            }
+
+            if (state.pendingBillCount > 0 && !state.syncing) {
+                item {
+                    TextButton(
+                        text = "继续同步账单",
+                        onClick = { controller.refresh(accountId, includeOld = true) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
@@ -150,7 +202,7 @@ fun HistoryScreen(
         OverlayBottomSheet(
             show = true,
             title = "记录详情",
-            onDismissRequest = { selectedRecord = null },
+            onDismissRequest = { selectedId = null },
         ) {
             Column(
                 modifier = Modifier
@@ -164,8 +216,8 @@ fun HistoryScreen(
                     if (record.amount.isNotBlank()) {
                         KeyValueRow("用量", record.amount)
                     }
-                    if (record.orderNo.isNotBlank()) {
-                        KeyValueRow("订单", record.orderNo)
+                    if (record.displayOrderNo().isNotBlank()) {
+                        KeyValueRow("订单", record.displayOrderNo())
                     }
                     if (record.payOrderNo.isNotBlank()) {
                         KeyValueRow("结算订单", record.payOrderNo)
@@ -180,10 +232,20 @@ fun HistoryScreen(
                         )
                     }
                 }
+
+                SectionCard(title = "账单与优惠") {
+                    HistoryBillBlock(
+                        record = record,
+                        syncing = state.syncingIds.contains(record.id),
+                        showMetadata = true,
+                        onRetryBill = { controller.retryBill(record.id) },
+                    )
+                }
+
                 Button(
                     onClick = {
-                        pendingDelete = record
-                        selectedRecord = null
+                        pendingDeleteId = record.id
+                        selectedId = null
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColorsPrimary(
@@ -206,24 +268,25 @@ fun HistoryScreen(
         onConfirm = {
             val record = pendingDelete ?: return@ConfirmDialog
             scope.launch {
-                runCatching { repository.delete(record.id) }
-                    .onSuccess {
-                        refresh()
-                        snackbar.show("记录已删除")
-                    }
-                    .onFailure { snackbar.show("删除失败", isError = true) }
+                if (controller.delete(record)) {
+                    snackbar.show("记录已删除")
+                } else {
+                    snackbar.show("删除失败", isError = true)
+                }
             }
-            pendingDelete = null
+            pendingDeleteId = null
         },
-        onDismiss = { pendingDelete = null },
+        onDismiss = { pendingDeleteId = null },
     )
 }
 
 @Composable
 private fun HistoryCard(
     record: HistoryRecord,
+    syncing: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    onRetryBill: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -232,63 +295,343 @@ private fun HistoryCard(
         pressFeedbackType = PressFeedbackType.Sink,
         onClick = onClick,
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 14.dp, bottom = 14.dp, end = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = record.deviceName.ifBlank { "饮水机" },
-                    style = MiuixTheme.textStyles.body1,
-                )
-                Text(
-                    text = formatHistoryTime(record.updatedAt),
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    PhaseBadge(record.phase)
-                    if (record.amount.isNotBlank()) {
-                        Text(
-                            text = "用量 ${record.amount}",
-                            style = MiuixTheme.textStyles.footnote1,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                        )
-                    }
-                }
-                if (record.orderNo.isNotBlank()) {
                     Text(
-                        text = "订单 ${record.orderNo}",
+                        text = record.deviceName.ifBlank { "饮水机" },
+                        style = MiuixTheme.textStyles.body1,
+                    )
+                    Text(
+                        text = formatHistoryTime(record.updatedAt),
                         style = MiuixTheme.textStyles.footnote1,
                         color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     )
                 }
-                if (record.error.isNotBlank()) {
-                    Text(
-                        text = record.error,
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = MiuixTheme.colorScheme.error,
+                IconButton(
+                    onClick = onDelete,
+                    backgroundColor = Color.Transparent,
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Delete,
+                        contentDescription = "删除记录",
                     )
                 }
             }
-            IconButton(
-                onClick = onDelete,
-                backgroundColor = androidx.compose.ui.graphics.Color.Transparent,
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(
-                    imageVector = MiuixIcons.Delete,
-                    contentDescription = "删除记录",
+                PhaseBadge(record.phase)
+                if (record.amount.isNotBlank()) {
+                    Text(
+                        text = "用量 ${record.amount}",
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                    )
+                }
+            }
+
+            if (record.displayOrderNo().isNotBlank()) {
+                Text(
+                    text = "订单 ${record.displayOrderNo()}",
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
                 )
             }
+
+            HistoryBillBlock(
+                record = record,
+                syncing = syncing,
+                showMetadata = false,
+                onRetryBill = onRetryBill,
+            )
+
+            if (record.error.isNotBlank()) {
+                Text(
+                    text = record.error,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryBillBlock(
+    record: HistoryRecord,
+    syncing: Boolean,
+    showMetadata: Boolean,
+    onRetryBill: () -> Unit,
+) {
+    val colors = MiuixTheme.colorScheme
+    val bill = record.bill
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (bill == null) {
+            Text(
+                text = "账单",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+            Text(
+                text = billPlaceholder(record, syncing),
+                style = MiuixTheme.textStyles.body2,
+                color = if (record.billState == BillState.ERROR) colors.error else colors.onSurfaceSecondary,
+            )
+            if (record.billError.isNotBlank() &&
+                record.billState != BillState.ERROR &&
+                record.billState != BillState.UNMATCHED
+            ) {
+                Text(
+                    text = record.billError,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.error,
+                )
+            }
+            if (record.expectsBill() && !syncing) {
+                TextButton(
+                    text = "同步账单",
+                    onClick = onRetryBill,
+                )
+            }
+            return@Column
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "账单",
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.onSurfaceSecondary,
+                )
+                Text(
+                    text = billOrderStatusLabel(bill.orderStatus),
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = if (bill.orderStatus == 5) colors.error else colors.onSurfaceSecondary,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = billAmountLabel(bill.orderStatus),
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.onSurfaceSecondary,
+                )
+                Text(
+                    text = bill.paidAmount.ifBlank { "—" }.let { "¥$it" },
+                    style = MiuixTheme.textStyles.title3,
+                    color = colors.primary,
+                )
+            }
+        }
+
+        if (bill.originalAmount.isNotBlank() ||
+            bill.promotions.isNotEmpty() ||
+            bill.paymentDiscountAmount.isNotBlank() ||
+            bill.ticket != null
+        ) {
+            PreferenceDivider()
+        }
+
+        if (bill.originalAmount.isNotBlank()) {
+            BillAmountRow("原价", "¥${bill.originalAmount}")
+        }
+        bill.promotions.forEach { promotion ->
+            BillAmountRow(promotion.label, "-¥${promotion.amount}")
+        }
+        bill.ticket?.let { ticket ->
+            TicketBlock(ticket, bill.ticketLogError)
+        }
+        if (bill.paymentDiscountAmount.isNotBlank()) {
+            BillAmountRow("支付优惠", "-¥${bill.paymentDiscountAmount}")
+        }
+        if (bill.originalAmount.isNotBlank() || bill.promotions.isNotEmpty() ||
+            bill.paymentDiscountAmount.isNotBlank() || bill.ticket != null
+        ) {
+            PreferenceDivider()
+        }
+        BillAmountRow(
+            label = billAmountLabel(bill.orderStatus),
+            value = "¥${bill.paidAmount.ifBlank { "—" }}",
+            emphasized = true,
+        )
+
+        if (bill.ticket == null) {
+            Text(
+                text = "本单未使用通用小票抵扣。",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+        }
+
+        if (record.billError.isNotBlank()) {
+            Text(
+                text = "刷新失败，显示上次账单：${record.billError}",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.error,
+            )
+        }
+
+        if (syncing) {
+            Text(
+                text = "正在同步账单…",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+        }
+
+        if (showMetadata) {
+            if (bill.orderNo.isNotBlank()) {
+                KeyValueRow("账单订单", bill.orderNo)
+            }
+            if (bill.shopName.isNotBlank()) {
+                KeyValueRow("店铺", bill.shopName)
+            }
+            if (bill.machineName.isNotBlank()) {
+                KeyValueRow("账单设备", bill.machineName)
+            }
+            if (bill.payTypeName.isNotBlank()) {
+                KeyValueRow("支付方式", bill.payTypeName)
+            }
+            if (bill.payTime.isNotBlank()) {
+                KeyValueRow("支付时间", bill.payTime)
+            }
+        }
+
+        if (!syncing) {
+            TextButton(
+                text = "刷新账单",
+                onClick = onRetryBill,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TicketBlock(ticket: BillTicket, ticketLogError: String) {
+    val colors = MiuixTheme.colorScheme
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.surfaceContainer, RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(
+            text = "通用小票 · ${ticket.shopName.ifBlank { "当前店铺" }}",
+            style = MiuixTheme.textStyles.body2,
+        )
+        Text(
+            text = "消耗 ${ticket.points} 点 · 抵扣 ¥${ticket.deductionYuan}",
+            style = MiuixTheme.textStyles.body2,
+            color = colors.primary,
+        )
+        if (ticket.principalPoints > 0 || ticket.presentPoints > 0) {
+            Text(
+                text = "本金 ${ticket.principalPoints} 点 · 赠送 ${ticket.presentPoints} 点",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+        }
+        if (ticket.matchedLog) {
+            val meta = listOfNotNull(
+                ticket.remark.takeIf { it.isNotBlank() },
+                ticket.createdAt.takeIf { it.isNotBlank() },
+            ).joinToString(" · ")
+            if (meta.isNotBlank()) {
+                Text(
+                    text = meta,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.onSurfaceSecondary,
+                )
+            }
+            if (ticket.logPoints > 0 &&
+                ticket.billPoints > 0 &&
+                ticket.logPoints != ticket.billPoints
+            ) {
+                Text(
+                    text = "账单抵扣 ${ticket.billPoints} 点，流水记录 ${ticket.logPoints} 点，请以账单为准。",
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.error,
+                )
+            }
+        } else {
+            Text(
+                text = if (ticketLogError.isNotBlank()) {
+                    "店铺流水获取失败，以账单抵扣为准。"
+                } else {
+                    "店铺流水未匹配，以账单抵扣为准。"
+                },
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BillAmountRow(
+    label: String,
+    value: String,
+    emphasized: Boolean = false,
+) {
+    val colors = MiuixTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MiuixTheme.textStyles.body2,
+            color = colors.onSurfaceSecondary,
+        )
+        Text(
+            text = value,
+            style = if (emphasized) MiuixTheme.textStyles.body1 else MiuixTheme.textStyles.body2,
+            color = if (emphasized) colors.primary else colors.onSurface,
+        )
+    }
+}
+
+private fun HistoryRecord.displayOrderNo(): String =
+    orderNo.takeUnless { it.startsWith("local-") }.orEmpty()
+
+private fun billAmountLabel(orderStatus: Int): String =
+    if (orderStatus == 0 || orderStatus == 1) "需付" else "实付"
+
+private fun billPlaceholder(record: HistoryRecord, syncing: Boolean): String {
+    if (!record.expectsBill()) {
+        return "本次未产生费用。"
+    }
+    if (syncing) return "正在同步账单…"
+    return when (record.billState) {
+        BillState.ERROR -> record.billError.ifBlank { "账单同步失败，可重试。" }
+        BillState.UNMATCHED -> record.billError.ifBlank { "未找到对应账单，可重试。" }
+        BillState.MATCHED -> "账单数据为空，可重试。"
+        BillState.NONE -> if (record.isWithinBillWindow(System.currentTimeMillis())) {
+            "账单尚未同步。"
+        } else {
+            "较早的记录，点开详情或重试后按需匹配账单。"
         }
     }
 }

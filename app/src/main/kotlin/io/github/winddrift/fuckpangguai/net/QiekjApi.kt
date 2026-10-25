@@ -2,6 +2,7 @@ package io.github.winddrift.fuckpangguai.net
 
 import io.github.winddrift.fuckpangguai.net.dto.AfterPay
 import io.github.winddrift.fuckpangguai.net.dto.ApiResponse
+import io.github.winddrift.fuckpangguai.net.dto.BillOrderDto
 import io.github.winddrift.fuckpangguai.net.dto.GoodsDetail
 import io.github.winddrift.fuckpangguai.net.dto.IntegralTaskDto
 import io.github.winddrift.fuckpangguai.net.dto.ItemsList
@@ -88,6 +89,14 @@ interface QiekjApi {
     @FormUrlEncoded
     @POST("order/pay_status")
     suspend fun orderPayStatus(@FieldMap body: Map<String, String>): ApiResponse<Boolean>
+
+    @FormUrlEncoded
+    @POST("order/list")
+    suspend fun orderList(@FieldMap body: Map<String, String>): ApiResponse<ItemsList<BillOrderDto>>
+
+    @FormUrlEncoded
+    @POST("order/detail")
+    suspend fun orderDetail(@FieldMap body: Map<String, String>): ApiResponse<BillOrderDto>
 
     @FormUrlEncoded
     @POST("user/info")

@@ -51,6 +51,7 @@ import io.github.winddrift.fuckpangguai.confirm.ConfirmState
 import io.github.winddrift.fuckpangguai.confirm.LocationPhase
 import io.github.winddrift.fuckpangguai.debug.DebugScreen
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
+import io.github.winddrift.fuckpangguai.history.HistoryController
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import io.github.winddrift.fuckpangguai.history.HistoryScreen
 import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
@@ -102,6 +103,7 @@ fun PangguaiRoot(
     newConfirmController: () -> ConfirmController,
     waterSessionManager: WaterSessionManager,
     historyRepository: HistoryRepository,
+    historyController: HistoryController,
     settingsStore: AppSettingsStore,
     assetController: AssetController,
     pointsController: PointsController,
@@ -535,7 +537,8 @@ fun PangguaiRoot(
                         )
 
                         RootDestination.History -> HistoryScreen(
-                            repository = historyRepository,
+                            controller = historyController,
+                            accountId = activeAccount?.localId,
                             scrollBehavior = historyScrollBehavior,
                             bottomContentPadding = floatingNavClearance,
                         )

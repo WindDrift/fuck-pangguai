@@ -16,6 +16,7 @@ data class WaterSession(
     val amount: String = "",
     val identify: String = "",
     val payOrderNo: String = "",
+    val payOrderId: String = "",
     val payType: String = "0",
     val settleAttempted: Boolean = false,
     val error: String = "",

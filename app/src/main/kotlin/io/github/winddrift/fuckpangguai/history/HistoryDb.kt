@@ -18,10 +18,16 @@ data class HistoryRecord(
     val amount: String,
     val orderNo: String,
     val payOrderNo: String,
+    val payOrderId: String,
+    val identify: String,
     val phase: String,
     val error: String,
     val startedAt: Long,
     val updatedAt: Long,
+    val billState: BillState,
+    val bill: BillInfo?,
+    val billError: String,
+    val billFetchedAt: Long,
 )
 
 class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
@@ -38,10 +44,16 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
                 amount TEXT NOT NULL,
                 order_no TEXT NOT NULL UNIQUE,
                 pay_order_no TEXT NOT NULL,
+                pay_order_id TEXT NOT NULL DEFAULT '',
+                identify TEXT NOT NULL DEFAULT '',
                 phase TEXT NOT NULL,
                 error TEXT NOT NULL,
                 started_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
+                updated_at INTEGER NOT NULL,
+                bill_state TEXT NOT NULL DEFAULT 'none',
+                bill_json TEXT NOT NULL DEFAULT '',
+                bill_error TEXT NOT NULL DEFAULT '',
+                bill_fetched_at INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -59,28 +71,51 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
                     "ON $TABLE(account_id, updated_at DESC)",
             )
         }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE $TABLE ADD COLUMN pay_order_id TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE $TABLE ADD COLUMN identify TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE $TABLE ADD COLUMN bill_state TEXT NOT NULL DEFAULT 'none'")
+            db.execSQL("ALTER TABLE $TABLE ADD COLUMN bill_json TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE $TABLE ADD COLUMN bill_error TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE $TABLE ADD COLUMN bill_fetched_at INTEGER NOT NULL DEFAULT 0")
+        }
     }
 
     fun upsert(session: WaterSession, accountId: String): Long {
+        val orderKey = session.orderNo
+            .ifBlank { session.msgId }
+            .ifBlank { "local-${session.startedAt}" }
         val values = ContentValues().apply {
             put("account_id", accountId)
             put("goods_id", session.goodsId)
             put("device_name", session.deviceName)
             put("sku_id", session.skuId)
             put("amount", session.amount)
-            put("order_no", session.orderNo.ifBlank { session.msgId })
+            put("order_no", orderKey)
             put("pay_order_no", session.payOrderNo)
+            put("pay_order_id", session.payOrderId)
+            put("identify", session.identify)
             put("phase", session.phase)
             put("error", session.error)
             put("started_at", session.startedAt)
             put("updated_at", session.updatedAt)
         }
-        return writableDatabase.insertWithOnConflict(
+        val existingId = readableDatabase.query(
             TABLE,
+            arrayOf("_id"),
+            "order_no = ?",
+            arrayOf(orderKey),
             null,
-            values,
-            SQLiteDatabase.CONFLICT_REPLACE,
-        )
+            null,
+            null,
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0) else null
+        }
+        if (existingId != null) {
+            writableDatabase.update(TABLE, values, "_id = ?", arrayOf(existingId.toString()))
+            return existingId
+        }
+        return writableDatabase.insertOrThrow(TABLE, null, values)
     }
 
     fun list(accountId: String): List<HistoryRecord> {
@@ -95,6 +130,7 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
             "updated_at DESC",
         ).use { cursor ->
             while (cursor.moveToNext()) {
+                val rawBill = cursor.getString(cursor.getColumnIndexOrThrow("bill_json"))
                 result += HistoryRecord(
                     id = cursor.getLong(cursor.getColumnIndexOrThrow("_id")),
                     accountId = cursor.getString(cursor.getColumnIndexOrThrow("account_id")),
@@ -104,14 +140,79 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
                     amount = cursor.getString(cursor.getColumnIndexOrThrow("amount")),
                     orderNo = cursor.getString(cursor.getColumnIndexOrThrow("order_no")),
                     payOrderNo = cursor.getString(cursor.getColumnIndexOrThrow("pay_order_no")),
+                    payOrderId = cursor.getString(cursor.getColumnIndexOrThrow("pay_order_id")),
+                    identify = cursor.getString(cursor.getColumnIndexOrThrow("identify")),
                     phase = cursor.getString(cursor.getColumnIndexOrThrow("phase")),
                     error = cursor.getString(cursor.getColumnIndexOrThrow("error")),
                     startedAt = cursor.getLong(cursor.getColumnIndexOrThrow("started_at")),
                     updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")),
+                    billState = BillState.fromStorage(
+                        cursor.getString(cursor.getColumnIndexOrThrow("bill_state")),
+                    ),
+                    bill = BillCodec.decode(rawBill),
+                    billError = cursor.getString(cursor.getColumnIndexOrThrow("bill_error")),
+                    billFetchedAt = cursor.getLong(cursor.getColumnIndexOrThrow("bill_fetched_at")),
                 )
             }
         }
         return result
+    }
+
+    fun saveBill(id: Long, accountId: String, bill: BillInfo): Int {
+        val values = ContentValues().apply {
+            put("bill_state", BillState.MATCHED.storage)
+            put("bill_json", BillCodec.encode(bill))
+            put("bill_error", "")
+            put("bill_fetched_at", bill.fetchedAt)
+        }
+        return writableDatabase.update(
+            TABLE,
+            values,
+            "_id = ? AND account_id = ?",
+            arrayOf(id.toString(), accountId),
+        )
+    }
+
+    fun markBillUnmatched(id: Long, accountId: String, message: String, fetchedAt: Long): Int {
+        val values = ContentValues().apply {
+            put("bill_state", BillState.UNMATCHED.storage)
+            put("bill_json", "")
+            put("bill_error", message)
+            put("bill_fetched_at", fetchedAt)
+        }
+        return writableDatabase.update(
+            TABLE,
+            values,
+            "_id = ? AND account_id = ?",
+            arrayOf(id.toString(), accountId),
+        )
+    }
+
+    fun markBillError(id: Long, accountId: String, message: String, fetchedAt: Long): Int {
+        val values = ContentValues().apply {
+            put("bill_state", BillState.ERROR.storage)
+            put("bill_error", message)
+            put("bill_fetched_at", fetchedAt)
+        }
+        return writableDatabase.update(
+            TABLE,
+            values,
+            "_id = ? AND account_id = ?",
+            arrayOf(id.toString(), accountId),
+        )
+    }
+
+    fun markBillRefreshError(id: Long, accountId: String, message: String, fetchedAt: Long): Int {
+        val values = ContentValues().apply {
+            put("bill_error", message)
+            put("bill_fetched_at", fetchedAt)
+        }
+        return writableDatabase.update(
+            TABLE,
+            values,
+            "_id = ? AND account_id = ?",
+            arrayOf(id.toString(), accountId),
+        )
     }
 
     fun delete(id: Long, accountId: String): Int =
@@ -138,7 +239,7 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
 
     private companion object {
         const val DB_NAME = "pangguai_history.db"
-        const val DB_VERSION = 2
+        const val DB_VERSION = 3
         const val TABLE = "water_history"
     }
 }
@@ -160,12 +261,22 @@ class HistoryRepository(
 
     suspend fun list(): List<HistoryRecord> = withContext(Dispatchers.IO) {
         val accountId = accountStore.activeLocalId() ?: return@withContext emptyList()
+        list(accountId)
+    }
+
+    suspend fun list(accountId: String): List<HistoryRecord> = withContext(Dispatchers.IO) {
+        if (accountId.isBlank()) return@withContext emptyList()
         ensureBackfill(accountId)
         db.list(accountId)
     }
 
     suspend fun delete(id: Long) = withContext(Dispatchers.IO) {
         val accountId = accountStore.activeLocalId() ?: return@withContext 0
+        db.delete(id, accountId)
+    }
+
+    suspend fun delete(id: Long, accountId: String) = withContext(Dispatchers.IO) {
+        if (accountId.isBlank()) return@withContext 0
         db.delete(id, accountId)
     }
 
@@ -181,6 +292,37 @@ class HistoryRepository(
 
     suspend fun reassignAccount(fromLocalId: String, toLocalId: String) = withContext(Dispatchers.IO) {
         db.reassignAccount(fromLocalId, toLocalId)
+    }
+
+    suspend fun saveBill(id: Long, accountId: String, bill: BillInfo) = withContext(Dispatchers.IO) {
+        if (accountId.isNotBlank()) db.saveBill(id, accountId, bill)
+    }
+
+    suspend fun markBillUnmatched(
+        id: Long,
+        accountId: String,
+        message: String,
+        fetchedAt: Long,
+    ) = withContext(Dispatchers.IO) {
+        if (accountId.isNotBlank()) db.markBillUnmatched(id, accountId, message, fetchedAt)
+    }
+
+    suspend fun markBillError(
+        id: Long,
+        accountId: String,
+        message: String,
+        fetchedAt: Long,
+    ) = withContext(Dispatchers.IO) {
+        if (accountId.isNotBlank()) db.markBillError(id, accountId, message, fetchedAt)
+    }
+
+    suspend fun markBillRefreshError(
+        id: Long,
+        accountId: String,
+        message: String,
+        fetchedAt: Long,
+    ) = withContext(Dispatchers.IO) {
+        if (accountId.isNotBlank()) db.markBillRefreshError(id, accountId, message, fetchedAt)
     }
 
     private fun ensureBackfill(accountId: String) {

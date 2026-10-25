@@ -228,6 +228,7 @@ class WaterSyncService : Service() {
             val order = repository.afterPayCreate(session.identify)
             updated = updated.copy(
                 payOrderNo = order.orderNo,
+                payOrderId = order.orderId,
                 payType = order.payType,
                 updatedAt = System.currentTimeMillis(),
             )

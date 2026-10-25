@@ -26,6 +26,8 @@ import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
 import io.github.winddrift.fuckpangguai.storage.DeviceConfigStore
 import io.github.winddrift.fuckpangguai.storage.PlanCacheStore
 import io.github.winddrift.fuckpangguai.confirm.ConfirmController
+import io.github.winddrift.fuckpangguai.history.BillRepository
+import io.github.winddrift.fuckpangguai.history.HistoryController
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import android.content.Context
 import android.os.Build
@@ -127,6 +129,11 @@ class AppGraph(context: Context) {
         assetRepository = assetRepository,
         snapshotStore = assetSnapshotStore,
         settingsStore = settingsStore,
+    )
+    val historyController = HistoryController(
+        scope = scope,
+        historyRepository = historyRepository,
+        billRepository = BillRepository(api),
     )
 
     val pointsController = PointsController(

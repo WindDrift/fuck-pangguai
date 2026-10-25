@@ -41,6 +41,7 @@ data class TicketLog(
     val shopName: String = "",
     val type: Int = 0,
     val subType: Int = 0,
+    val orderNo: String = "",
     val amount: Int = 0,
     val principalAmount: Int = 0,
     val presentAmount: Int = 0,
