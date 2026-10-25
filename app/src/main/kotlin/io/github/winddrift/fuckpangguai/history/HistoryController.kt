@@ -25,6 +25,7 @@ data class HistoryUiState(
     val syncingIds: Set<Long> = emptySet(),
     val pendingBillCount: Int = 0,
     val error: String? = null,
+    val filter: HistoryFilter = HistoryFilter(),
 )
 
 class HistoryController(
@@ -77,6 +78,30 @@ class HistoryController(
             _state.update { it.copy(records = records, loading = false) }
             syncBills(records, accountId, includeOld, currentGeneration)
         }
+    }
+
+    fun setQuery(query: String) {
+        _state.update { state ->
+            state.copy(filter = state.filter.copy(query = query))
+        }
+    }
+
+    fun updateFilter(transform: (HistoryFilter) -> HistoryFilter) {
+        _state.update { state ->
+            state.copy(filter = transform(state.filter))
+        }
+    }
+
+    /** 清除筛选但保留搜索词。 */
+    fun clearFilters() {
+        _state.update { state ->
+            state.copy(filter = HistoryFilter(query = state.filter.query))
+        }
+    }
+
+    /** 清除搜索词与全部筛选。 */
+    fun clearQueryAndFilters() {
+        _state.update { it.copy(filter = HistoryFilter()) }
     }
 
     /** 打开详情时调用：只有尚无账单的记录才自动请求，旧记录也能按需匹配。 */

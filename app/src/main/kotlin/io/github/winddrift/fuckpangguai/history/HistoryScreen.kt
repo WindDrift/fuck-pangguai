@@ -2,7 +2,6 @@ package io.github.winddrift.fuckpangguai.history
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -28,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +58,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Filter
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -76,9 +77,28 @@ fun HistoryScreen(
     val state by controller.state.collectAsStateWithLifecycle()
     var selectedId by remember { mutableStateOf<Long?>(null) }
     var pendingDeleteId by remember { mutableStateOf<Long?>(null) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
 
     val selectedRecord = state.records.firstOrNull { it.id == selectedId }
     val pendingDelete = state.records.firstOrNull { it.id == pendingDeleteId }
+    val visibleRecords = remember(state.records, state.filter) {
+        state.records.applyHistoryFilter(state.filter, System.currentTimeMillis())
+    }
+    val deviceOptions = remember(state.records) {
+        state.records.map { it.deviceName }
+            .distinct()
+            .sortedWith(compareBy<String> { it.isBlank() }.thenBy { it })
+    }
+    val ticketShopOptions = remember(state.records) {
+        state.records.mapNotNull { it.bill?.ticket?.shopName }
+            .distinct()
+            .sortedWith(compareBy<String> { it.isBlank() }.thenBy { it })
+    }
+    val countText = if (state.filter.hasActiveConstraints) {
+        "显示 ${visibleRecords.size} / 共 ${state.records.size} 条"
+    } else {
+        "共 ${state.records.size} 条"
+    }
 
     LaunchedEffect(accountId) {
         controller.refresh(accountId)
@@ -99,68 +119,76 @@ fun HistoryScreen(
         onRefresh = { controller.refresh(accountId, includeOld = true) },
         topAppBarScrollBehavior = scrollBehavior,
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = 12.dp,
-                end = 16.dp,
-                bottom = 12.dp + bottomContentPadding,
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AnimatedContent(
-                        targetState = state.records.size,
-                        transitionSpec = {
-                            (fadeIn(ContentFadeSpec) + slideInVertically(ContentSlideSpec) { it / 2 }) togetherWith
-                                (fadeOut(ContentFadeSpec) + slideOutVertically(ContentSlideSpec) { -it / 2 })
-                        },
-                        label = "historyCount",
-                    ) { count ->
-                        Text(
-                            text = "共 $count 条",
-                            style = MiuixTheme.textStyles.body1,
-                        )
-                    }
-                    when {
-                        state.syncing -> Text(
-                            text = "正在同步账单…",
-                            style = MiuixTheme.textStyles.footnote1,
-                            color = colors.onSurfaceSecondary,
-                        )
-                        state.pendingBillCount > 0 -> Text(
-                            text = "还有 ${state.pendingBillCount} 条账单待同步，下拉继续",
-                            style = MiuixTheme.textStyles.footnote1,
-                            color = colors.onSurfaceSecondary,
-                        )
-                    }
-                    state.error?.let { message ->
-                        Text(
-                            text = message,
-                            style = MiuixTheme.textStyles.footnote1,
-                            color = colors.error,
-                        )
-                    }
-                }
-            }
+        Column(modifier = Modifier.fillMaxSize()) {
+            HistoryFilterHeader(
+                filter = state.filter,
+                onQueryChange = controller::setQuery,
+                onOpenFilters = { showFilters = true },
+                onClearFilters = controller::clearFilters,
+                onRemoveChip = { chip ->
+                    controller.updateFilter { it.removeChip(chip) }
+                },
+            )
 
-            if (state.loading && state.records.isEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 8.dp,
+                    end = 16.dp,
+                    bottom = 12.dp + bottomContentPadding,
+                ),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 item {
-                    Text(
-                        text = "正在读取记录…",
-                        style = MiuixTheme.textStyles.body2,
-                        color = colors.onSurfaceSecondary,
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        AnimatedContent(
+                            targetState = countText,
+                            transitionSpec = {
+                                (fadeIn(ContentFadeSpec) + slideInVertically(ContentSlideSpec) { it / 2 }) togetherWith
+                                    (fadeOut(ContentFadeSpec) + slideOutVertically(ContentSlideSpec) { -it / 2 })
+                            },
+                            label = "historyCount",
+                        ) { text ->
+                            Text(
+                                text = text,
+                                style = MiuixTheme.textStyles.body1,
+                            )
+                        }
+                        when {
+                            state.syncing -> Text(
+                                text = "正在同步账单…",
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = colors.onSurfaceSecondary,
+                            )
+                            state.pendingBillCount > 0 -> Text(
+                                text = "还有 ${state.pendingBillCount} 条账单待同步，下拉继续",
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = colors.onSurfaceSecondary,
+                            )
+                        }
+                        state.error?.let { message ->
+                            Text(
+                                text = message,
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = colors.error,
+                            )
+                        }
+                    }
                 }
-            } else {
-                item {
-                    AnimatedVisibility(
-                        visible = state.records.isEmpty(),
-                        enter = fadeIn(ContentFadeSpec),
-                        exit = fadeOut(ContentFadeSpec),
-                    ) {
+
+                when {
+                    state.loading && state.records.isEmpty() -> item {
+                        Text(
+                            text = "正在读取记录…",
+                            style = MiuixTheme.textStyles.body2,
+                            color = colors.onSurfaceSecondary,
+                        )
+                    }
+
+                    state.records.isEmpty() -> item {
                         EmptyState(
                             icon = MiuixIcons.Recent,
                             title = "还没有接水记录",
@@ -168,35 +196,63 @@ fun HistoryScreen(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
+
+                    visibleRecords.isEmpty() -> item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            EmptyState(
+                                icon = MiuixIcons.Filter,
+                                title = "没有符合条件的记录",
+                                summary = "试试调整关键词或清除部分筛选条件。",
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Button(
+                                onClick = controller::clearQueryAndFilters,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColorsPrimary(),
+                            ) {
+                                Text("清除搜索和筛选")
+                            }
+                        }
+                    }
                 }
-            }
 
-            items(state.records, key = { it.id }) { record ->
-                HistoryCard(
-                    record = record,
-                    syncing = state.syncingIds.contains(record.id),
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = ContentFadeSpec,
-                        placementSpec = PageSlideSpec,
-                        fadeOutSpec = ContentFadeSpec,
-                    ),
-                    onClick = { selectedId = record.id },
-                    onDelete = { pendingDeleteId = record.id },
-                    onRetryBill = { controller.retryBill(record.id) },
-                )
-            }
-
-            if (state.pendingBillCount > 0 && !state.syncing) {
-                item {
-                    TextButton(
-                        text = "继续同步账单",
-                        onClick = { controller.refresh(accountId, includeOld = true) },
-                        modifier = Modifier.fillMaxWidth(),
+                items(visibleRecords, key = { it.id }) { record ->
+                    HistoryCard(
+                        record = record,
+                        syncing = state.syncingIds.contains(record.id),
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = ContentFadeSpec,
+                            placementSpec = PageSlideSpec,
+                            fadeOutSpec = ContentFadeSpec,
+                        ),
+                        onClick = { selectedId = record.id },
+                        onDelete = { pendingDeleteId = record.id },
+                        onRetryBill = { controller.retryBill(record.id) },
                     )
+                }
+
+                if (state.pendingBillCount > 0 && !state.syncing) {
+                    item {
+                        TextButton(
+                            text = "继续同步账单",
+                            onClick = { controller.refresh(accountId, includeOld = true) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
     }
+
+    HistoryFilterSheet(
+        show = showFilters,
+        filter = state.filter,
+        deviceOptions = deviceOptions,
+        ticketShopOptions = ticketShopOptions,
+        onDismiss = { showFilters = false },
+        onUpdate = controller::updateFilter,
+        onReset = controller::clearFilters,
+    )
 
     selectedRecord?.let { record ->
         OverlayBottomSheet(
@@ -612,9 +668,6 @@ private fun BillAmountRow(
         )
     }
 }
-
-private fun HistoryRecord.displayOrderNo(): String =
-    orderNo.takeUnless { it.startsWith("local-") }.orEmpty()
 
 private fun billAmountLabel(orderStatus: Int): String =
     if (orderStatus == 0 || orderStatus == 1) "需付" else "实付"
