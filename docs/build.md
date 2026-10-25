@@ -100,6 +100,8 @@ Release 默认开启 R8 与资源压缩。缺少签名配置不会阻止构建�
 - UI 使用 Miuix `0.9.4`。
 - 依赖从 Maven Central 与 Google Maven 解析，不需要 GitHub Packages 凭据。
 - 网络层使用 OkHttp、Retrofit 与 kotlinx.serialization；相机使用 CameraX，二维码解码使用 ZXing。
+- 通用小票充值使用支付宝官方 SDK `com.alipay.sdk:alipaysdk-android:15.8.35`，从 Maven Central 解析。该 SDK 为闭源 AAR，会增加 APK 体积；其许可与再分发条件以支付宝官方声明为准。
+- Release 构建会保留 `com.alipay.**` 并忽略其可选依赖告警，以确保混淆后仍能拉起支付宝；发布前应安装 release 包并打开充值页做冒烟检查，但不要在自动化流程中发起真实扣款。
 - 版本集中在 `gradle/libs.versions.toml`，升级依赖时优先修改这里。
 
 ## 常见构建问题
