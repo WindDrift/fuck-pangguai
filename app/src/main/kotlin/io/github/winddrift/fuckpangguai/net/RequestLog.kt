@@ -70,6 +70,8 @@ private val SENSITIVE_RESPONSE_FIELDS = setOf(
     "mobtoken",
     "moboptoken",
     "alipayaccount",
+    "prepayparam",
+    "alipayorderno",
     "unionid",
     "openid",
 )

@@ -8,16 +8,21 @@ import io.github.winddrift.fuckpangguai.net.dto.IntegralTaskDto
 import io.github.winddrift.fuckpangguai.net.dto.ItemsList
 import io.github.winddrift.fuckpangguai.net.dto.LoginBean
 import io.github.winddrift.fuckpangguai.net.dto.MsgSyncBean
+import io.github.winddrift.fuckpangguai.net.dto.PayChannel
 import io.github.winddrift.fuckpangguai.net.dto.PayChannelRoute
+import io.github.winddrift.fuckpangguai.net.dto.PrePay
 import io.github.winddrift.fuckpangguai.net.dto.ScanV2Bean
 import io.github.winddrift.fuckpangguai.net.dto.SignInActDto
 import io.github.winddrift.fuckpangguai.net.dto.Sku
 import io.github.winddrift.fuckpangguai.net.dto.Ticket
+import io.github.winddrift.fuckpangguai.net.dto.TicketGoods
 import io.github.winddrift.fuckpangguai.net.dto.TicketLog
 import io.github.winddrift.fuckpangguai.net.dto.TodaySignInDto
 import io.github.winddrift.fuckpangguai.net.dto.Unlock
 import io.github.winddrift.fuckpangguai.net.dto.UserBalance
 import io.github.winddrift.fuckpangguai.net.dto.UserProfile
+import io.github.winddrift.fuckpangguai.net.dto.VipOrderDetail
+import io.github.winddrift.fuckpangguai.net.dto.VirtualOrder
 import io.github.winddrift.fuckpangguai.net.dto.WaterSync
 import kotlinx.serialization.json.JsonElement
 import retrofit2.http.FieldMap
@@ -113,6 +118,26 @@ interface QiekjApi {
     @FormUrlEncoded
     @POST("tokenCoin/userTokenCoinLogs")
     suspend fun userTokenCoinLogs(@FieldMap body: Map<String, String>): ApiResponse<ItemsList<TicketLog>>
+
+    @FormUrlEncoded
+    @POST("tokenCoin/goods")
+    suspend fun ticketGoods(@FieldMap body: Map<String, String>): ApiResponse<TicketGoods>
+
+    @FormUrlEncoded
+    @POST("order/createVirtualOrder")
+    suspend fun createVirtualOrder(@FieldMap body: Map<String, String>): ApiResponse<VirtualOrder>
+
+    @FormUrlEncoded
+    @POST("order/vip/detail")
+    suspend fun vipOrderDetail(@FieldMap body: Map<String, String>): ApiResponse<VipOrderDetail>
+
+    @FormUrlEncoded
+    @POST("pay/ticket/getAvailablePayTypeList")
+    suspend fun ticketPayChannels(@FieldMap body: Map<String, String>): ApiResponse<List<PayChannel>>
+
+    @FormUrlEncoded
+    @POST("pay/unify/prePay")
+    suspend fun ticketPrePay(@FieldMap body: Map<String, String>): ApiResponse<PrePay>
 
     @FormUrlEncoded
     @POST("signin/signInAcList")
