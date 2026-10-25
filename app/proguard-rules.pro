@@ -24,6 +24,12 @@
     @retrofit2.http.* <methods>;
 }
 
+# Alipay SDK
+-keep class com.alipay.** { *; }
+-dontwarn com.alipay.**
+-dontwarn com.ta.utdid2.**
+-dontwarn com.ut.device.**
+
 # OkHttp / Okio
 -dontwarn okhttp3.**
 -dontwarn okio.**

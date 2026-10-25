@@ -14,6 +14,7 @@ coroutines = "1.10.2"
 camera = "1.6.2"
 zxing = "3.5.4"
 coil = "3.6.3"
+alipay = "15.8.35"
 junit = "4.13.2"
 
 [libraries]
@@ -43,6 +44,7 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+alipay-sdk = { group = "com.alipay.sdk", name = "alipaysdk-android", version.ref = "alipay" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

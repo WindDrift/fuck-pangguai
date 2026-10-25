@@ -146,6 +146,7 @@ dependencies {
     implementation(libs.zxing.core)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.alipay.sdk)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
