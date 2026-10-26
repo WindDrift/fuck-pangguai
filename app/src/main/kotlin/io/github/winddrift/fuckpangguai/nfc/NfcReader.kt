@@ -18,14 +18,18 @@ import androidx.lifecycle.LifecycleOwner
 
 @SuppressLint("MissingPermission")
 @Composable
-fun NfcReader(onPayload: (NfcPayload) -> Unit) {
+fun NfcReader(
+    availability: NfcAvailability,
+    onPayload: (NfcPayload) -> Unit,
+) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val adapter = remember(context) { NfcAdapter.getDefaultAdapter(context) }
     val latestOnPayload = rememberUpdatedState(onPayload)
 
-    DisposableEffect(activity, adapter) {
-        if (activity == null || adapter == null) {
+    // NFC 开关变化时重建 reader mode；生命周期已处于 RESUMED 时补发的 ON_RESUME 会立即重新启用。
+    DisposableEffect(activity, adapter, availability) {
+        if (activity == null || adapter == null || availability != NfcAvailability.Enabled) {
             return@DisposableEffect onDispose { }
         }
 

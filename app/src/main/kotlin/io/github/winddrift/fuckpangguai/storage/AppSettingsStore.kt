@@ -46,6 +46,14 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
         context.appDataStore.edit { it[SKIP_DEVICE_INFO] = enabled }
     }
 
+    val autoStartCamera: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[AUTO_START_CAMERA] ?: true
+    }
+
+    suspend fun setAutoStartCamera(enabled: Boolean) {
+        context.appDataStore.edit { it[AUTO_START_CAMERA] = enabled }
+    }
+
     val themeSettings: Flow<ThemeSettings> = context.appDataStore.data.map { preferences ->
         ThemeSettings(
             mode = preferences[THEME_MODE]
@@ -111,6 +119,7 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
     private companion object {
         val ONE_TAP = booleanPreferencesKey("one_tap_unlock")
         val SKIP_DEVICE_INFO = booleanPreferencesKey("skip_device_info")
+        val AUTO_START_CAMERA = booleanPreferencesKey("auto_start_camera")
         val DRY_RUN = booleanPreferencesKey("dry_run")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")

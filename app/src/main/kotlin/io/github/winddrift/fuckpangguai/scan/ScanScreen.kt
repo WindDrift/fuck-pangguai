@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.nfc.NfcAdapter
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,6 +16,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,15 +37,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -54,7 +57,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
+import io.github.winddrift.fuckpangguai.nfc.NfcAvailability
 import io.github.winddrift.fuckpangguai.nfc.NfcReader
+import io.github.winddrift.fuckpangguai.nfc.rememberNfcAvailability
 import io.github.winddrift.fuckpangguai.ui.animation.ColorSpringSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.components.AnimatedCheckMark
@@ -79,6 +84,7 @@ import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.SearchDevice
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -87,6 +93,9 @@ fun ScanScreen(
     controller: ScanController,
     onDeviceReady: (ResolvedDevice) -> Unit,
     skipDeviceInfo: Boolean = false,
+    autoStartCamera: Boolean = true,
+    cameraSessionStarted: Boolean = false,
+    onCameraStarted: () -> Unit = {},
     bottomContentPadding: Dp = 0.dp,
     onWarmUpLocation: () -> Unit = {},
 ) {
@@ -94,18 +103,9 @@ fun ScanScreen(
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbar = LocalSnackbar.current
-    val colors = MiuixTheme.colorScheme
     val scope = rememberCoroutineScope()
     val state by controller.state.collectAsStateWithLifecycle()
-    val cameraState = rememberQrCameraState()
-    val torchOn by cameraState.torchOn.collectAsStateWithLifecycle()
-    val flashAvailable by cameraState.flashAvailable.collectAsStateWithLifecycle()
-    val hasNfc = remember(context) { NfcAdapter.getDefaultAdapter(context) != null }
-    val torchTint by animateColorAsState(
-        targetValue = if (torchOn) colors.primary else Color.White,
-        animationSpec = ColorSpringSpec,
-        label = "torchTint",
-    )
+    val nfc = rememberNfcAvailability()
     var resolvingSource by remember { mutableStateOf(ScanSource.Qr) }
 
     LaunchedEffect(state) {
@@ -120,13 +120,29 @@ fun ScanScreen(
                 PackageManager.PERMISSION_GRANTED,
         )
     }
+    var startRequested by remember { mutableStateOf(false) }
+    val cameraRequested = autoStartCamera || cameraSessionStarted
+    val cameraState = if (cameraRequested && hasCameraPermission) rememberQrCameraState() else null
+    val latestOnCameraStarted = rememberUpdatedState(onCameraStarted)
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> hasCameraPermission = granted }
+    ) { granted ->
+        hasCameraPermission = granted
+        if (granted) onCameraStarted()
+    }
 
-    LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
+    fun requestCameraStart() {
+        startRequested = true
+        if (hasCameraPermission) {
+            onCameraStarted()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    LaunchedEffect(autoStartCamera) {
+        if (autoStartCamera && !hasCameraPermission) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
@@ -138,9 +154,11 @@ fun ScanScreen(
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                hasCameraPermission =
+                val granted =
                     ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                     PackageManager.PERMISSION_GRANTED
+                hasCameraPermission = granted
+                if (granted && startRequested) latestOnCameraStarted.value()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -177,7 +195,7 @@ fun ScanScreen(
         }
     }
 
-    NfcReader(onPayload = controller::onNfc)
+    NfcReader(availability = nfc, onPayload = controller::onNfc)
 
     BackHandler(enabled = manualInput) { manualInput = false }
 
@@ -186,7 +204,7 @@ fun ScanScreen(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        if (hasCameraPermission) {
+        if (cameraState != null) {
             QrCameraPreview(
                 cameraState = cameraState,
                 onQr = { raw ->
@@ -199,7 +217,7 @@ fun ScanScreen(
 
         ScanHeader(modifier = Modifier.align(Alignment.TopCenter))
 
-        if (!hasCameraPermission) {
+        if ((cameraRequested || startRequested) && !hasCameraPermission) {
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -247,6 +265,14 @@ fun ScanScreen(
             }
         }
 
+        if (!cameraRequested && !startRequested && state is ScanState.Idle) {
+            ScanIdleCenter(
+                nfc = nfc,
+                onScan = { requestCameraStart() },
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -259,8 +285,19 @@ fun ScanScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (hasNfc) {
-                NfcHintPill()
+            if (nfc != NfcAvailability.Unsupported) {
+                NfcHintPill(
+                    text = if (nfc == NfcAvailability.Enabled) {
+                        "碰一碰 NFC 标签也可识别"
+                    } else {
+                        "NFC 未开启，点此开启"
+                    },
+                    onClick = if (nfc == NfcAvailability.Disabled) {
+                        { openNfcSettings(context, snackbar) }
+                    } else {
+                        null
+                    },
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 ScanToolButton(
@@ -268,13 +305,8 @@ fun ScanScreen(
                     contentDescription = "从相册选择",
                     onClick = { galleryLauncher.launch("image/*") },
                 )
-                if (hasCameraPermission && flashAvailable) {
-                    ScanToolButton(
-                        icon = TorchIcon,
-                        contentDescription = if (torchOn) "关闭手电筒" else "打开手电筒",
-                        tint = torchTint,
-                        onClick = cameraState::toggleTorch,
-                    )
+                if (cameraState != null) {
+                    TorchToolButton(cameraState)
                 }
                 ScanToolButton(
                     icon = MiuixIcons.Edit,
@@ -373,12 +405,20 @@ private fun ScanHeader(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun NfcHintPill() {
+private fun NfcHintPill(
+    text: String,
+    onClick: (() -> Unit)? = null,
+) {
     Row(
         modifier = Modifier
-            .background(
-                color = Color.Black.copy(alpha = 0.38f),
-                shape = RoundedCornerShape(50),
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.38f))
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                },
             )
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -391,9 +431,72 @@ private fun NfcHintPill() {
             tint = Color.White.copy(alpha = 0.85f),
         )
         Text(
-            text = "碰一碰 NFC 标签也可识别",
+            text = text,
             style = MiuixTheme.textStyles.footnote1,
             color = Color.White.copy(alpha = 0.85f),
+        )
+    }
+}
+
+@Composable
+private fun ScanIdleCenter(
+    nfc: NfcAvailability,
+    onScan: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 32.dp, vertical = 96.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(
+            imageVector = if (nfc == NfcAvailability.Enabled) {
+                MiuixIcons.SearchDevice
+            } else {
+                MiuixIcons.Scan
+            },
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = Color.White.copy(alpha = 0.9f),
+        )
+        if (nfc == NfcAvailability.Enabled) {
+            Text(
+                text = "NFC 读取已就绪",
+                style = MiuixTheme.textStyles.title3,
+                color = Color.White,
+            )
+        }
+        Button(
+            onClick = onScan,
+            colors = ButtonDefaults.buttonColorsPrimary(),
+        ) {
+            Text("扫描二维码")
+        }
+        if (nfc == NfcAvailability.Unsupported) {
+            Text(
+                text = "设备不支持 NFC",
+                style = MiuixTheme.textStyles.footnote1,
+                color = Color.White.copy(alpha = 0.6f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TorchToolButton(cameraState: QrCameraState) {
+    val torchOn by cameraState.torchOn.collectAsStateWithLifecycle()
+    val flashAvailable by cameraState.flashAvailable.collectAsStateWithLifecycle()
+    if (flashAvailable) {
+        val torchTint by animateColorAsState(
+            targetValue = if (torchOn) MiuixTheme.colorScheme.primary else Color.White,
+            animationSpec = ColorSpringSpec,
+            label = "torchTint",
+        )
+        ScanToolButton(
+            icon = TorchIcon,
+            contentDescription = if (torchOn) "关闭手电筒" else "打开手电筒",
+            tint = torchTint,
+            onClick = cameraState::toggleTorch,
         )
     }
 }
@@ -477,5 +580,17 @@ private fun openAlipay(
     }.isSuccess
     if (!ok) {
         snackbar.show("无法打开支付宝", isError = true)
+    }
+}
+
+private fun openNfcSettings(
+    context: android.content.Context,
+    snackbar: AppSnackbarState,
+) {
+    val ok = runCatching {
+        context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+    }.isSuccess
+    if (!ok) {
+        snackbar.show("无法打开 NFC 设置", isError = true)
     }
 }

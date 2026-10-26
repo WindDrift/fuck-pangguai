@@ -76,6 +76,8 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
     val skipDeviceInfo by settingsStore.skipDeviceInfo
         .collectAsStateWithLifecycle(initialValue = false)
+    val autoStartCamera by settingsStore.autoStartCamera
+        .collectAsStateWithLifecycle(initialValue = true)
     val assetState by assetController.state.collectAsStateWithLifecycle()
     val assetMatchesActive = assetState.accountId == activeAccount?.localId
     var showSwitchSheet by remember { mutableStateOf(false) }
@@ -226,6 +228,15 @@ fun SettingsScreen(
                     },
                     title = "跳过设备信息",
                     summary = "识别成功后直接进入确认设备页，可配合一键解锁实现扫码即开",
+                )
+                PreferenceDivider()
+                SwitchPreference(
+                    checked = !autoStartCamera,
+                    onCheckedChange = { notAuto ->
+                        scope.launch { settingsStore.setAutoStartCamera(!notAuto) }
+                    },
+                    title = "不自动打开相机",
+                    summary = "打开后进入扫码页先显示待机界面，不自动启动相机，可提升冷启动速度；推荐同时开启系统 NFC",
                 )
                 PreferenceDivider()
                 SwitchPreference(

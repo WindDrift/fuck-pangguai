@@ -127,6 +127,10 @@ fun PangguaiRoot(
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
     val skipDeviceInfo by settingsStore.skipDeviceInfo
         .collectAsStateWithLifecycle(initialValue = false)
+    // DataStore 首次读取是异步的；在拿到持久化值前按“不自动打开相机”处理，避免冷启动先拉起相机。
+    val autoStartCamera by settingsStore.autoStartCamera
+        .collectAsStateWithLifecycle(initialValue = false)
+    var cameraSessionStarted by rememberSaveable { mutableStateOf(false) }
 
     var tab by rememberSaveable { mutableStateOf(MainTab.Scan) }
     var secondary by remember { mutableStateOf<SecondaryPage?>(null) }
@@ -605,6 +609,9 @@ fun PangguaiRoot(
                             controller = scanController,
                             onDeviceReady = { secondary = SecondaryPage.Confirm(it) },
                             skipDeviceInfo = skipDeviceInfo,
+                            autoStartCamera = autoStartCamera,
+                            cameraSessionStarted = cameraSessionStarted,
+                            onCameraStarted = { cameraSessionStarted = true },
                             bottomContentPadding = floatingNavClearance,
                             onWarmUpLocation = onWarmUpLocation,
                         )
