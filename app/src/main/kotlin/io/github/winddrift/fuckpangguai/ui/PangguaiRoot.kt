@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.AppController
 import io.github.winddrift.fuckpangguai.AppState
+import io.github.winddrift.fuckpangguai.about.AboutScreen
 import io.github.winddrift.fuckpangguai.account.AssetController
 import io.github.winddrift.fuckpangguai.account.AuthTarget
 import io.github.winddrift.fuckpangguai.auth.DisclaimerScreen
@@ -276,6 +277,10 @@ fun PangguaiRoot(
                 secondary = null
             }
 
+            is SecondaryPage.Debug -> {
+                secondary = if (page.backToAbout) SecondaryPage.About else null
+            }
+
             else -> secondary = null
         }
     }
@@ -303,6 +308,7 @@ fun PangguaiRoot(
             device = currentSecondary.device,
             state = confirmState,
         )
+        currentSecondary is SecondaryPage.About -> RootDestination.About
         currentSecondary is SecondaryPage.Debug -> RootDestination.Debug
         currentSecondary is SecondaryPage.AccountAccess ->
             RootDestination.AccountAccess(currentSecondary.target)
@@ -342,6 +348,7 @@ fun PangguaiRoot(
         session != null -> RootTopBar.Using
         state != AppState.Ready -> RootTopBar.None
         currentSecondary is SecondaryPage.Confirm -> RootTopBar.Confirm
+        currentSecondary is SecondaryPage.About -> RootTopBar.None
         currentSecondary is SecondaryPage.Debug -> RootTopBar.Debug
         currentSecondary is SecondaryPage.AccountAccess -> RootTopBar.AccountAccess
         currentSecondary is SecondaryPage.Tickets -> RootTopBar.Tickets
@@ -590,6 +597,14 @@ fun PangguaiRoot(
                             scrollBehavior = debugScrollBehavior,
                         )
 
+                        RootDestination.About -> AboutScreen(
+                            updateState = updateState,
+                            onCheckUpdate = updateController::checkManually,
+                            onShowUpdate = { showUpdateSheet = true },
+                            onOpenDebug = { secondary = SecondaryPage.Debug(backToAbout = true) },
+                            onBack = ::closeSecondary,
+                        )
+
                         RootDestination.History -> HistoryScreen(
                             controller = historyController,
                             accountId = activeAccount?.localId,
@@ -610,7 +625,7 @@ fun PangguaiRoot(
                             assetController = assetController,
                             accounts = accounts,
                             activeAccount = activeAccount,
-                            onOpenDebug = { secondary = SecondaryPage.Debug },
+                            onOpenAbout = { secondary = SecondaryPage.About },
                             onOpenTickets = { secondary = SecondaryPage.Tickets() },
                             onAddAccount = {
                                 controller.beginAddAccount()
@@ -697,6 +712,7 @@ private sealed interface RootDestination {
     data object Settings : RootDestination {
         override val tabOrder: Int = 3
     }
+    data object About : RootDestination
     data object Debug : RootDestination
     data class AccountAccess(val target: AuthTarget) : RootDestination {
         override val contentKey: Any = "AccountAccess"
@@ -774,8 +790,13 @@ private fun rootTransition(
                 (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { it / 4 })
         }
     }
+    if (initial is RootDestination.Debug && target is RootDestination.About) {
+        return (fadeIn(PageFadeSpec) + slideInHorizontally(PageSlideSpec) { -it / 10 }) togetherWith
+            (fadeOut(PageFadeSpec) + slideOutHorizontally(PageSlideSpec) { it / 4 })
+    }
     if (target is RootDestination.Confirm ||
         target is RootDestination.Debug ||
+        target is RootDestination.About ||
         target is RootDestination.AccountAccess ||
         target is RootDestination.Tickets ||
         target is RootDestination.TicketRecharge
@@ -785,6 +806,7 @@ private fun rootTransition(
     }
     if (initial is RootDestination.Confirm ||
         initial is RootDestination.Debug ||
+        initial is RootDestination.About ||
         initial is RootDestination.AccountAccess ||
         initial is RootDestination.Tickets ||
         initial is RootDestination.TicketRecharge

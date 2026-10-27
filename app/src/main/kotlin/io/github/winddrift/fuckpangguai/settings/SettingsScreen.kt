@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -21,7 +20,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.winddrift.fuckpangguai.BuildConfig
 import io.github.winddrift.fuckpangguai.account.AssetController
 import io.github.winddrift.fuckpangguai.account.StoredAccount
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
@@ -36,19 +34,17 @@ import io.github.winddrift.fuckpangguai.ui.components.PreferenceGroup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Promotions
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun SettingsScreen(
@@ -57,7 +53,7 @@ fun SettingsScreen(
     assetController: AssetController,
     accounts: List<StoredAccount>,
     activeAccount: StoredAccount?,
-    onOpenDebug: () -> Unit,
+    onOpenAbout: () -> Unit,
     onOpenTickets: () -> Unit,
     onAddAccount: () -> Unit,
     onSwitchAccount: (String) -> Unit,
@@ -71,7 +67,6 @@ fun SettingsScreen(
     val context = LocalContext.current
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
-    val colors = MiuixTheme.colorScheme
     val themeSettings by settingsStore.themeSettings
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
     val skipDeviceInfo by settingsStore.skipDeviceInfo
@@ -88,7 +83,6 @@ fun SettingsScreen(
 
     var oneTap by remember { mutableStateOf(false) }
     var dryRun by remember { mutableStateOf(true) }
-    var versionTaps by remember { mutableIntStateOf(0) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var pendingCsv by remember { mutableStateOf<String?>(null) }
@@ -311,24 +305,18 @@ fun SettingsScreen(
         }
 
         item {
-            PreferenceGroup(title = "关于") {
-                BasicComponent(
-                    title = "版本",
-                    summary = "${BuildConfig.VERSION_NAME}（${BuildConfig.VERSION_CODE}）",
-                    onClick = {
-                        versionTaps += 1
-                        if (versionTaps >= 7) {
-                            versionTaps = 0
-                            onOpenDebug()
-                        }
+            PreferenceGroup(title = "其他") {
+                ArrowPreference(
+                    title = "关于",
+                    summary = "版本、开发者、开源许可与更新",
+                    startAction = {
+                        Icon(
+                            imageVector = MiuixIcons.Info,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
                     },
-                )
-                PreferenceDivider()
-                Text(
-                    text = "非官方客户端，与胖乖生活、学校及设备运营方无关。",
-                    modifier = Modifier.padding(16.dp),
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = colors.onSurfaceSecondary,
+                    onClick = onOpenAbout,
                 )
             }
         }
