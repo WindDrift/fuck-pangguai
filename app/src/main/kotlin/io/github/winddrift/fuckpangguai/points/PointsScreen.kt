@@ -112,6 +112,7 @@ fun PointsScreen(
             PointsBalanceCard(
                 integral = state.integral,
                 loading = state.loading,
+                running = state.running,
                 onRefresh = controller::refresh,
             )
         }
@@ -305,6 +306,7 @@ fun PointsScreen(
 private fun PointsBalanceCard(
     integral: String,
     loading: Boolean,
+    running: Boolean,
     onRefresh: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
@@ -328,7 +330,7 @@ private fun PointsBalanceCard(
             TextButton(
                 text = if (loading) "刷新中…" else "刷新",
                 onClick = onRefresh,
-                enabled = !loading,
+                enabled = !loading && !running,
             )
         }
     }

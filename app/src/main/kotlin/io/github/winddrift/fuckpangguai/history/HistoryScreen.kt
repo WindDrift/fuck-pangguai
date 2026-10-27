@@ -106,6 +106,10 @@ fun HistoryScreen(
     val firstLoadFailed = state.records.isEmpty() && state.error != null && !state.loading
     val showCount = state.records.isNotEmpty() ||
         (!state.loading && !firstLoadFailed)
+    val showHeader = showCount ||
+        state.syncing ||
+        state.pendingBillCount > 0 ||
+        (state.records.isNotEmpty() && state.error != null)
 
     LaunchedEffect(accountId) {
         controller.refresh(accountId)
@@ -156,7 +160,7 @@ fun HistoryScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item {
+                if (showHeader) item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (showCount) {
                             AnimatedContent(
