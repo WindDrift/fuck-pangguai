@@ -30,6 +30,29 @@ import java.io.IOException
 class TicketRechargeControllerTest {
 
     @Test
+    fun `leave confirmation covers order and payment stages`() {
+        val confirming = setOf(
+            RechargeStage.CreatingOrder,
+            RechargeStage.OrderReady,
+            RechargeStage.PreparingPay,
+            RechargeStage.WaitingSdk,
+            RechargeStage.Verifying,
+        )
+        confirming.forEach { stage ->
+            assertTrue(
+                stage.name,
+                TicketRechargeState(stage = stage).requiresLeaveConfirmation,
+            )
+        }
+        (RechargeStage.entries - confirming).forEach { stage ->
+            assertFalse(
+                stage.name,
+                TicketRechargeState(stage = stage).requiresLeaveConfirmation,
+            )
+        }
+    }
+
+    @Test
     fun `create order uses official parameter names and selected reward`() = runTest {
         val deps = Deps()
         val controller = deps.controller(this)

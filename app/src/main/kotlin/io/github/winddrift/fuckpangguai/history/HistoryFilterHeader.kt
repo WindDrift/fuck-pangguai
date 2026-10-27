@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -30,7 +31,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Filter
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import io.github.winddrift.fuckpangguai.ui.components.MinimumTouchTarget
 
 @Composable
 internal fun HistoryFilterHeader(
@@ -124,20 +125,24 @@ internal fun HistoryChoiceChip(
     onClick: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
-    Card(
-        insideMargin = PaddingValues(0.dp),
-        colors = CardDefaults.defaultColors(
-            color = if (selected) colors.primaryContainer else colors.surfaceContainer,
-            contentColor = if (selected) colors.onPrimaryContainer else colors.onSurface,
-        ),
-        pressFeedbackType = PressFeedbackType.Sink,
+    MinimumTouchTarget(
         onClick = onClick,
+        role = Role.RadioButton,
+        selected = selected,
     ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            style = MiuixTheme.textStyles.footnote1,
-        )
+        Card(
+            insideMargin = PaddingValues(0.dp),
+            colors = CardDefaults.defaultColors(
+                color = if (selected) colors.primaryContainer else colors.surfaceContainer,
+                contentColor = if (selected) colors.onPrimaryContainer else colors.onSurface,
+            ),
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                style = MiuixTheme.textStyles.footnote1,
+            )
+        }
     }
 }
 
@@ -147,30 +152,33 @@ private fun FilterChip(
     onClick: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
-    Card(
-        insideMargin = PaddingValues(0.dp),
-        colors = CardDefaults.defaultColors(
-            color = colors.surfaceContainer,
-            contentColor = colors.onSurface,
-        ),
-        pressFeedbackType = PressFeedbackType.Sink,
+    MinimumTouchTarget(
         onClick = onClick,
+        role = Role.Button,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        Card(
+            insideMargin = PaddingValues(0.dp),
+            colors = CardDefaults.defaultColors(
+                color = colors.surfaceContainer,
+                contentColor = colors.onSurface,
+            ),
         ) {
-            Text(
-                text = label,
-                style = MiuixTheme.textStyles.footnote1,
-            )
-            Icon(
-                imageVector = MiuixIcons.Close,
-                contentDescription = "移除筛选",
-                modifier = Modifier.size(12.dp),
-                tint = colors.onSurfaceSecondary,
-            )
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MiuixTheme.textStyles.footnote1,
+                )
+                Icon(
+                    imageVector = MiuixIcons.Close,
+                    contentDescription = "移除筛选",
+                    modifier = Modifier.size(12.dp),
+                    tint = colors.onSurfaceSecondary,
+                )
+            }
         }
     }
 }

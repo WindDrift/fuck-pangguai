@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -240,7 +240,10 @@ fun PointsScreen(
             }
         }
 
-        items(state.tasks) { task ->
+        itemsIndexed(
+            items = state.tasks,
+            key = { index, task -> task.taskCode.ifBlank { "task-$index" } },
+        ) { _, task ->
             PointsTaskCard(
                 task = task,
                 running = state.running,

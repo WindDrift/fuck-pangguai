@@ -16,7 +16,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +29,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -65,6 +67,7 @@ import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.components.AnimatedCheckMark
 import io.github.winddrift.fuckpangguai.ui.components.AppSnackbarState
 import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
+import io.github.winddrift.fuckpangguai.ui.components.MinimumTouchTarget
 import io.github.winddrift.fuckpangguai.ui.components.ScanFrameOverlay
 import io.github.winddrift.fuckpangguai.ui.components.TorchIcon
 import kotlinx.coroutines.Dispatchers
@@ -198,6 +201,13 @@ fun ScanScreen(
     NfcReader(availability = nfc, onPayload = controller::onNfc)
 
     BackHandler(enabled = manualInput) { manualInput = false }
+
+    fun submitManualInput() {
+        if (manualText.isBlank()) return
+        controller.onQr(manualText)
+        manualInput = false
+        manualText = ""
+    }
 
     Box(
         modifier = Modifier
@@ -357,13 +367,11 @@ fun ScanScreen(
                         modifier = Modifier.fillMaxWidth(),
                         label = "二维码内容或 NQT/SN/IMEI",
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submitManualInput() }),
                     )
                     Button(
-                        onClick = {
-                            controller.onQr(manualText)
-                            manualInput = false
-                            manualText = ""
-                        },
+                        onClick = { submitManualInput() },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = manualText.isNotBlank(),
                         colors = ButtonDefaults.buttonColorsPrimary(),
@@ -409,17 +417,21 @@ private fun NfcHintPill(
     text: String,
     onClick: (() -> Unit)? = null,
 ) {
+    if (onClick != null) {
+        MinimumTouchTarget(onClick = onClick, role = Role.Button) {
+            NfcHintPillContent(text)
+        }
+    } else {
+        NfcHintPillContent(text)
+    }
+}
+
+@Composable
+private fun NfcHintPillContent(text: String) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(Color.Black.copy(alpha = 0.38f))
-            .then(
-                if (onClick != null) {
-                    Modifier.clickable(role = Role.Button, onClick = onClick)
-                } else {
-                    Modifier
-                },
-            )
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
