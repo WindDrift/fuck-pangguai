@@ -58,6 +58,14 @@ data class TicketRechargeState(
             stage == RechargeStage.WaitingSdk ||
             stage == RechargeStage.Verifying
 
+    /** 订单已创建或支付流程未结束时，离开页面需要用户确认。 */
+    val requiresLeaveConfirmation: Boolean
+        get() = stage == RechargeStage.CreatingOrder ||
+            stage == RechargeStage.OrderReady ||
+            stage == RechargeStage.PreparingPay ||
+            stage == RechargeStage.WaitingSdk ||
+            stage == RechargeStage.Verifying
+
     val canConfirm: Boolean
         get() = stage == RechargeStage.GoodsReady && alipayAvailable && selectedReward != null
 

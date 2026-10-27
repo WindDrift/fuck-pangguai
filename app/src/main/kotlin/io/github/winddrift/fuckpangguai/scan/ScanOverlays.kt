@@ -41,7 +41,7 @@ fun ScanStateOverlays(
             state is ScanState.ConfirmBind ||
             state is ScanState.Message,
     ) {
-        onReset()
+        if (state !is ScanState.ConfirmBind || !state.binding) onReset()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -107,7 +107,7 @@ fun ScanStateOverlays(
             is ScanState.ConfirmBind -> OverlayBottomSheet(
                 show = true,
                 title = "绑定标签到设备？",
-                onDismissRequest = onReset,
+                onDismissRequest = { if (!state.binding) onReset() },
             ) {
                 Column(
                     modifier = Modifier.navigationBarsPadding(),
@@ -117,7 +117,11 @@ fun ScanStateOverlays(
                         KeyValueRow("标签 ID", state.tagId)
                         KeyValueRow("SN", state.device.sourceValue)
                         Text(
-                            "绑定后，碰一下该标签即可快速解析这台设备。",
+                            if (state.binding) {
+                                "正在写入标签映射，请稍候…"
+                            } else {
+                                "绑定后，碰一下该标签即可快速解析这台设备。"
+                            },
                             style = MiuixTheme.textStyles.body2,
                             color = MiuixTheme.colorScheme.onSurfaceSecondary,
                         )
@@ -125,14 +129,16 @@ fun ScanStateOverlays(
                     Button(
                         onClick = onConfirmBind,
                         modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.binding,
                         colors = ButtonDefaults.buttonColorsPrimary(),
                     ) {
-                        Text("绑定并继续")
+                        Text(if (state.binding) "正在绑定…" else "绑定并继续")
                     }
                     TextButton(
                         text = "跳过",
                         onClick = onSkipBind,
                         modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.binding,
                     )
                 }
             }

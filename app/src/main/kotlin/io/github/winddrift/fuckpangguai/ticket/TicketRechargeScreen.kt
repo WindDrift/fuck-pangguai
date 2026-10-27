@@ -1,6 +1,5 @@
 package io.github.winddrift.fuckpangguai.ticket
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,21 +47,10 @@ fun TicketRechargeScreen(
     val context = LocalContext.current
     val snackbar = LocalSnackbar.current
     var showConfirm by remember { mutableStateOf(false) }
-    var showLeaveDialog by remember { mutableStateOf(false) }
     val colors = MiuixTheme.colorScheme
 
     LaunchedEffect(shopId, shopName) {
         controller.start(shopId, shopName)
-    }
-
-    val inPayment = state.stage == RechargeStage.CreatingOrder ||
-        state.stage == RechargeStage.OrderReady ||
-        state.stage == RechargeStage.PreparingPay ||
-        state.stage == RechargeStage.WaitingSdk ||
-        state.stage == RechargeStage.Verifying
-
-    BackHandler(enabled = inPayment) {
-        showLeaveDialog = true
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -328,16 +316,6 @@ fun TicketRechargeScreen(
         confirmText = "确认充值",
         onConfirm = controller::confirmCreateOrder,
         onDismiss = { showConfirm = false },
-    )
-
-    ConfirmDialog(
-        show = showLeaveDialog,
-        title = "放弃支付？",
-        summary = "订单会保留至超时，稍后可在店铺充值时重新查询状态。",
-        confirmText = "放弃支付",
-        destructive = true,
-        onConfirm = onClose,
-        onDismiss = { showLeaveDialog = false },
     )
 }
 

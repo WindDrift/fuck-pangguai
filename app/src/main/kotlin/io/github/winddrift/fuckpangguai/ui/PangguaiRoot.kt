@@ -123,6 +123,7 @@ fun PangguaiRoot(
     val accounts by controller.accounts.collectAsStateWithLifecycle()
     val activeAccount by controller.activeAccount.collectAsStateWithLifecycle()
     val activeSession by waterSessionManager.session.collectAsStateWithLifecycle()
+    val ticketRechargeState by ticketRechargeController.state.collectAsStateWithLifecycle()
     val themeSettings by settingsStore.themeSettings
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
     val skipDeviceInfo by settingsStore.skipDeviceInfo
@@ -135,6 +136,7 @@ fun PangguaiRoot(
     var tab by rememberSaveable { mutableStateOf(MainTab.Scan) }
     var secondary by remember { mutableStateOf<SecondaryPage?>(null) }
     var showEndSessionDialog by remember { mutableStateOf(false) }
+    var showTicketLeaveDialog by remember { mutableStateOf(false) }
 
     val confirmDevice = (secondary as? SecondaryPage.Confirm)?.device
     val confirmController = remember(confirmDevice) {
@@ -169,6 +171,7 @@ fun PangguaiRoot(
             secondary = null
             tab = MainTab.Scan
             showEndSessionDialog = false
+            showTicketLeaveDialog = false
         }
     }
 
@@ -238,14 +241,19 @@ fun PangguaiRoot(
         }
     }
 
-    fun closeSecondary() {
+    fun closeSecondary(force: Boolean = false) {
         when (val page = secondary) {
             is SecondaryPage.Tickets -> {
                 secondary = if (page.shopId.isBlank()) null else SecondaryPage.Tickets()
             }
 
             is SecondaryPage.TicketRecharge -> {
-                secondary = SecondaryPage.Tickets(page.shopId, page.shopName)
+                if (!force && ticketRechargeState.requiresLeaveConfirmation) {
+                    showTicketLeaveDialog = true
+                } else {
+                    showTicketLeaveDialog = false
+                    secondary = SecondaryPage.Tickets(page.shopId, page.shopName)
+                }
             }
 
             is SecondaryPage.AccountAccess -> {
@@ -385,24 +393,24 @@ fun PangguaiRoot(
                     when (bar) {
                         RootTopBar.None -> Unit
                         RootTopBar.Using -> AppTopBar("接水状态", onBack = ::requestUsingExit)
-                        RootTopBar.Confirm -> AppTopBar("确认设备", onBack = ::closeSecondary)
+                        RootTopBar.Confirm -> AppTopBar("确认设备", onBack = { closeSecondary() })
                         RootTopBar.Debug -> AppTopBar(
                             "诊断",
-                            onBack = ::closeSecondary,
+                            onBack = { closeSecondary() },
                             scrollBehavior = debugScrollBehavior,
                         )
                         RootTopBar.AccountAccess -> AppTopBar(
                             accountAccessTitle,
-                            onBack = ::closeSecondary,
+                            onBack = { closeSecondary() },
                         )
                         RootTopBar.Tickets -> AppTopBar(
                             ticketTitle,
-                            onBack = ::closeSecondary,
+                            onBack = { closeSecondary() },
                         )
 
                         RootTopBar.TicketRecharge -> AppTopBar(
                             "充值通用小票",
-                            onBack = ::closeSecondary,
+                            onBack = { closeSecondary() },
                         )
 
                         RootTopBar.History -> AppTopBar(
@@ -528,7 +536,7 @@ fun PangguaiRoot(
                             controller = ticketRechargeController,
                             shopId = dest.shopId,
                             shopName = dest.shopName,
-                            onClose = ::closeSecondary,
+                            onClose = { closeSecondary() },
                         )
 
                         is RootDestination.AccountAccess -> LoginScreen(
@@ -626,6 +634,17 @@ fun PangguaiRoot(
                     destructive = true,
                     onConfirm = waterSessionManager::end,
                     onDismiss = { showEndSessionDialog = false },
+                )
+
+                ConfirmDialog(
+                    show = showTicketLeaveDialog &&
+                        currentSecondary is SecondaryPage.TicketRecharge,
+                    title = "放弃支付？",
+                    summary = "订单会保留至超时，稍后可在店铺充值时重新查询状态。",
+                    confirmText = "放弃支付",
+                    destructive = true,
+                    onConfirm = { closeSecondary(force = true) },
+                    onDismiss = { showTicketLeaveDialog = false },
                 )
             }
         }

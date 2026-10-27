@@ -8,6 +8,7 @@ import io.github.winddrift.fuckpangguai.net.userMessage
 import io.github.winddrift.fuckpangguai.nfc.NfcPayload
 import io.github.winddrift.fuckpangguai.nfc.NfcTagBinding
 import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +34,7 @@ sealed interface ScanState {
     data class ConfirmBind(
         val tagId: String,
         val device: ResolvedDevice,
+        val binding: Boolean = false,
     ) : ScanState
 
     data class Message(
@@ -62,6 +64,7 @@ class ScanController(
     private var pendingTagId: String? = null
 
     fun onQr(raw: String) {
+        if (_state.value.isBinding) return
         when (val target = QrParser.parse(raw)) {
             is QrTarget.Device -> resolve(target.key, target.value, pendingTagId, ScanSource.Qr)
             is QrTarget.Unsupported -> {
@@ -71,6 +74,7 @@ class ScanController(
     }
 
     fun onNfc(payload: NfcPayload) {
+        if (_state.value.isBinding) return
         val sn = payload.sn
         if (!sn.isNullOrBlank()) {
             resolve("SN", sn, null, ScanSource.Nfc)
@@ -112,7 +116,9 @@ class ScanController(
 
     fun confirmBind() {
         val current = _state.value
-        if (current !is ScanState.ConfirmBind) return
+        if (current !is ScanState.ConfirmBind || current.binding) return
+        // 先同步锁定状态，避免连点或绑定完成前再次发起写入。
+        _state.value = current.copy(binding = true)
         scope.launch {
             try {
                 val detail = current.device.detail
@@ -129,18 +135,23 @@ class ScanController(
                         updatedAt = System.currentTimeMillis(),
                     ),
                 )
+                if (!isBindingCurrent(current.tagId)) return@launch
                 pendingTagId = null
                 _state.value = ScanState.DeviceReady(current.device)
                 prefetchPlans(current.device)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (throwable: Throwable) {
-                _state.value = ScanState.Message(throwable.userMessage())
+                if (isBindingCurrent(current.tagId)) {
+                    _state.value = ScanState.Message(throwable.userMessage())
+                }
             }
         }
     }
 
     fun skipBind() {
         val current = _state.value
-        if (current !is ScanState.ConfirmBind) return
+        if (current !is ScanState.ConfirmBind || current.binding) return
         pendingTagId = null
         _state.value = ScanState.DeviceReady(current.device)
         prefetchPlans(current.device)
@@ -149,6 +160,16 @@ class ScanController(
     fun reset() {
         pendingTagId = null
         _state.value = ScanState.Idle
+    }
+
+    private val ScanState.isBinding: Boolean
+        get() = this is ScanState.ConfirmBind && binding
+
+    private fun isBindingCurrent(tagId: String): Boolean {
+        val current = _state.value
+        return current is ScanState.ConfirmBind &&
+            current.tagId == tagId &&
+            current.binding
     }
 
     fun showMessage(text: String, rawUrl: String? = null) {

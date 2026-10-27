@@ -92,9 +92,8 @@ fun AccountAssetCard(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
                     IconButton(
-                        onClick = {
-                            if (!loading && !account.invalid) onRefresh()
-                        },
+                        onClick = onRefresh,
+                        enabled = !loading && !account.invalid,
                         backgroundColor = Color.Transparent,
                     ) {
                         Icon(

@@ -325,6 +325,7 @@ private fun PointsBalanceCard(
             TextButton(
                 text = if (loading) "刷新中…" else "刷新",
                 onClick = onRefresh,
+                enabled = !loading,
             )
         }
     }
@@ -411,7 +412,8 @@ private fun PointsTaskCard(
             if (actionable) {
                 TextButton(
                     text = if (running) "运行中" else "完成",
-                    onClick = { if (!running) onComplete() },
+                    onClick = onComplete,
+                    enabled = !running,
                 )
             } else if (reason == PointsSkipReason.NotificationDisabled) {
                 TextButton(
