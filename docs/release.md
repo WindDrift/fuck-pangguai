@@ -11,6 +11,13 @@
 
 版本号位于 `app/build.gradle.kts` 的 `defaultConfig`。
 
+## Release 正文
+
+- 标签触发时，工作流读取上一个 `v*` 标签到当前标签之间的提交，按 `feat/fix/perf/refactor/docs/test/build/ci/style` 分组为中文小节，空组省略，末尾附 compare 链接。
+- `chore(release):` 发版提交会被排除；直接提交到 master 的改动也会进入正文，因此提交信息保持单行 `type(scope): 摘要`。
+- 没有任何条目时写入「常规维护与问题修复」。
+- 关于页更新弹窗展示同一份正文的纯文本版本。
+
 ## 本地签名
 
 1. 生成自己的 keystore（只在可信机器上保存）：
@@ -66,7 +73,7 @@
 2. 构建签名 Release APK。
 3. 使用 `apksigner` 校验签名。
 4. 将 APK 命名为 `fuck-pangguai-<versionName>.apk`，上传同名（去掉 `.apk`）的 artifact，内含 APK 与 `mapping.txt`。
-5. 标签触发时创建 GitHub Release；手动触发只上传 artifact。
+5. 标签触发时创建 GitHub Release 并用自动生成的正文；手动触发只上传 artifact。
 
 ## 创建发布
 

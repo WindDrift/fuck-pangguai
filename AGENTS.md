@@ -56,6 +56,7 @@ chore(release): 发布 1.1.0-abc1234
 - `versionName` 使用 `MAJOR.MINOR.PATCH-<短哈希>`；较大功能变更升 minor，修复与文档类变更升 patch。
 - 短哈希取发布提交之前的最后一个内容提交，因为提交无法包含自身哈希。
 - 版本变更放在独立发版提交中，不与功能或文档改动混在一起。
+- Release 正文由 `.github/workflows/release.yml` 按提交类型自动分组生成，发版提交会被排除；提交信息保持单行 `type(scope): 摘要`。
 
 ## 工作方式
 
