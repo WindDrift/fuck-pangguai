@@ -15,6 +15,7 @@
 | `NfcPayloadParserTest` | NFC 标签解析与映射输入 |
 | `NfcAvailabilityTest` | 系统 NFC 硬件缺失、已关闭与已开启状态映射 |
 | `ScanStateTest` | 扫描状态机与重复结果抑制 |
+| `ScanGreetingTest` | 扫码页问候时段边界与别名/昵称/脱敏手机号回退 |
 | `QiekjSignerTest` | 普通签名、风控签名与密钥变化 |
 | `ApiModelsTest` | 响应模型、账号/余额/小票解析与错误封装 |
 | `SessionExpiryTest` | 登录失效码识别与登录路径排除 |

@@ -59,6 +59,7 @@ import io.github.winddrift.fuckpangguai.points.PointsController
 import io.github.winddrift.fuckpangguai.points.PointsScreen
 import io.github.winddrift.fuckpangguai.scan.ScanController
 import io.github.winddrift.fuckpangguai.scan.ScanScreen
+import io.github.winddrift.fuckpangguai.scan.UpdateAvailableSheet
 import io.github.winddrift.fuckpangguai.settings.SettingsScreen
 import io.github.winddrift.fuckpangguai.settings.TicketsScreen
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
@@ -79,6 +80,7 @@ import io.github.winddrift.fuckpangguai.ui.navigation.MainTab
 import io.github.winddrift.fuckpangguai.ui.navigation.SecondaryPage
 import io.github.winddrift.fuckpangguai.ui.navigation.icon
 import io.github.winddrift.fuckpangguai.update.UpdateController
+import io.github.winddrift.fuckpangguai.update.UpdateState
 import io.github.winddrift.fuckpangguai.using.UsingScreen
 import io.github.winddrift.fuckpangguai.water.SessionPhase
 import io.github.winddrift.fuckpangguai.water.WaterSession
@@ -139,6 +141,9 @@ fun PangguaiRoot(
     var secondary by remember { mutableStateOf<SecondaryPage?>(null) }
     var showEndSessionDialog by remember { mutableStateOf(false) }
     var showTicketLeaveDialog by remember { mutableStateOf(false) }
+    var showUpdateSheet by remember { mutableStateOf(false) }
+    val updateState by updateController.state.collectAsStateWithLifecycle()
+    val availableUpdate = updateState as? UpdateState.Available
 
     val confirmDevice = (secondary as? SecondaryPage.Confirm)?.device
     val confirmController = remember(confirmDevice) {
@@ -179,6 +184,10 @@ fun PangguaiRoot(
 
     LaunchedEffect(state) {
         if (state == AppState.Ready) updateController.checkOnStart()
+    }
+
+    LaunchedEffect(updateState) {
+        if (updateState !is UpdateState.Available) showUpdateSheet = false
     }
 
     LaunchedEffect(Unit) {
@@ -626,6 +635,9 @@ fun PangguaiRoot(
                             autoStartCamera = autoStartCamera,
                             cameraSessionStarted = cameraSessionStarted,
                             onCameraStarted = { cameraSessionStarted = true },
+                            account = activeAccount,
+                            updateState = updateState,
+                            onShowUpdate = { showUpdateSheet = true },
                             bottomContentPadding = floatingNavClearance,
                             onWarmUpLocation = onWarmUpLocation,
                         )
@@ -651,6 +663,12 @@ fun PangguaiRoot(
                     destructive = true,
                     onConfirm = { closeSecondary(force = true) },
                     onDismiss = { showTicketLeaveDialog = false },
+                )
+
+                UpdateAvailableSheet(
+                    show = showUpdateSheet && availableUpdate != null,
+                    update = availableUpdate,
+                    onDismiss = { showUpdateSheet = false },
                 )
             }
         }

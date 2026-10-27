@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -58,6 +59,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.winddrift.fuckpangguai.account.StoredAccount
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import io.github.winddrift.fuckpangguai.nfc.NfcAvailability
 import io.github.winddrift.fuckpangguai.nfc.NfcReader
@@ -70,7 +72,10 @@ import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
 import io.github.winddrift.fuckpangguai.ui.components.MinimumTouchTarget
 import io.github.winddrift.fuckpangguai.ui.components.ScanFrameOverlay
 import io.github.winddrift.fuckpangguai.ui.components.TorchIcon
+import io.github.winddrift.fuckpangguai.update.UpdateState
+import java.time.LocalTime
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
@@ -88,6 +93,7 @@ import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Photos
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.SearchDevice
+import top.yukonga.miuix.kmp.icon.extended.Update
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -99,6 +105,9 @@ fun ScanScreen(
     autoStartCamera: Boolean = true,
     cameraSessionStarted: Boolean = false,
     onCameraStarted: () -> Unit = {},
+    account: StoredAccount? = null,
+    updateState: UpdateState = UpdateState.Idle,
+    onShowUpdate: () -> Unit = {},
     bottomContentPadding: Dp = 0.dp,
     onWarmUpLocation: () -> Unit = {},
 ) {
@@ -225,7 +234,12 @@ fun ScanScreen(
             ScanFrameOverlay(modifier = Modifier.fillMaxSize())
         }
 
-        ScanHeader(modifier = Modifier.align(Alignment.TopCenter))
+        ScanHeader(
+            account = account,
+            showUpdate = updateState is UpdateState.Available,
+            onShowUpdate = onShowUpdate,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
 
         if ((cameraRequested || startRequested) && !hasCameraPermission) {
             Column(
@@ -385,7 +399,20 @@ fun ScanScreen(
 }
 
 @Composable
-private fun ScanHeader(modifier: Modifier = Modifier) {
+private fun ScanHeader(
+    account: StoredAccount?,
+    showUpdate: Boolean,
+    onShowUpdate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var now by remember { mutableStateOf(LocalTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = LocalTime.now()
+            delay(60_000L)
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -397,16 +424,68 @@ private fun ScanHeader(modifier: Modifier = Modifier) {
             .statusBarsPadding()
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = "扫码接水",
-                style = MiuixTheme.textStyles.title2,
-                color = Color.White,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = greetingText(account, now.hour),
+                    style = MiuixTheme.textStyles.title2,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "对准设备上的二维码，或碰一碰 NFC 标签",
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = Color.White.copy(alpha = 0.72f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (showUpdate) {
+                UpdateAvailablePill(
+                    onClick = onShowUpdate,
+                    modifier = Modifier.padding(start = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateAvailablePill(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MiuixTheme.colorScheme
+    MinimumTouchTarget(
+        onClick = onClick,
+        role = Role.Button,
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(colors.primary)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = MiuixIcons.Update,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = colors.onPrimary,
             )
             Text(
-                text = "对准设备上的二维码，或碰一碰 NFC 标签",
+                text = "新版本可用",
                 style = MiuixTheme.textStyles.footnote1,
-                color = Color.White.copy(alpha = 0.72f),
+                color = colors.onPrimary,
             )
         }
     }
