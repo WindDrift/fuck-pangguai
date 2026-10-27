@@ -33,6 +33,7 @@ import io.github.winddrift.fuckpangguai.ui.components.KeyValueRow
 import io.github.winddrift.fuckpangguai.ui.components.PhaseBadge
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
 import io.github.winddrift.fuckpangguai.ui.components.SessionTimeline
+import io.github.winddrift.fuckpangguai.ui.format.sessionStatusLabel
 import io.github.winddrift.fuckpangguai.water.SessionPhase
 import io.github.winddrift.fuckpangguai.water.WaterSession
 import top.yukonga.miuix.kmp.basic.Text
@@ -86,15 +87,15 @@ fun UsingScreen(session: WaterSession) {
                 color = colors.primary,
             )
             AnimatedContent(
-                targetState = terminal,
+                targetState = sessionStatusLabel(session.phase),
                 transitionSpec = {
                     (fadeIn(ContentFadeSpec) + slideInVertically(ContentSlideSpec) { it / 3 }) togetherWith
                         (fadeOut(ContentFadeSpec) + slideOutVertically(ContentSlideSpec) { -it / 3 })
                 },
-                label = "sessionTerminal",
-            ) { ended ->
+                label = "sessionStatus",
+            ) { status ->
                 Text(
-                    text = if (ended) "本次接水已结束" else "接水进行中",
+                    text = status,
                     style = MiuixTheme.textStyles.footnote1,
                     color = colors.onSurfaceSecondary,
                 )

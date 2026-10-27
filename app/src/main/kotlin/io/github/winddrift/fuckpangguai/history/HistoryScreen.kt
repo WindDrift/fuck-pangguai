@@ -59,6 +59,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Filter
+import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -102,6 +103,9 @@ fun HistoryScreen(
     } else {
         "共 ${state.records.size} 条"
     }
+    val firstLoadFailed = state.records.isEmpty() && state.error != null && !state.loading
+    val showCount = state.records.isNotEmpty() ||
+        (!state.loading && !firstLoadFailed)
 
     LaunchedEffect(accountId) {
         controller.refresh(accountId)
@@ -154,18 +158,20 @@ fun HistoryScreen(
             ) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        AnimatedContent(
-                            targetState = countText,
-                            transitionSpec = {
-                                (fadeIn(ContentFadeSpec) + slideInVertically(ContentSlideSpec) { it / 2 }) togetherWith
-                                    (fadeOut(ContentFadeSpec) + slideOutVertically(ContentSlideSpec) { -it / 2 })
-                            },
-                            label = "historyCount",
-                        ) { text ->
-                            Text(
-                                text = text,
-                                style = MiuixTheme.textStyles.body1,
-                            )
+                        if (showCount) {
+                            AnimatedContent(
+                                targetState = countText,
+                                transitionSpec = {
+                                    (fadeIn(ContentFadeSpec) + slideInVertically(ContentSlideSpec) { it / 2 }) togetherWith
+                                        (fadeOut(ContentFadeSpec) + slideOutVertically(ContentSlideSpec) { -it / 2 })
+                                },
+                                label = "historyCount",
+                            ) { text ->
+                                Text(
+                                    text = text,
+                                    style = MiuixTheme.textStyles.body1,
+                                )
+                            }
                         }
                         when {
                             state.syncing -> Text(
@@ -179,12 +185,14 @@ fun HistoryScreen(
                                 color = colors.onSurfaceSecondary,
                             )
                         }
-                        state.error?.let { message ->
-                            Text(
-                                text = message,
-                                style = MiuixTheme.textStyles.footnote1,
-                                color = colors.error,
-                            )
+                        if (state.records.isNotEmpty()) {
+                            state.error?.let { message ->
+                                Text(
+                                    text = message,
+                                    style = MiuixTheme.textStyles.footnote1,
+                                    color = colors.error,
+                                )
+                            }
                         }
                     }
                 }
@@ -196,6 +204,24 @@ fun HistoryScreen(
                             style = MiuixTheme.textStyles.body2,
                             color = colors.onSurfaceSecondary,
                         )
+                    }
+
+                    firstLoadFailed -> item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            EmptyState(
+                                icon = MiuixIcons.Info,
+                                title = "记录加载失败",
+                                summary = state.error ?: "无法读取接水记录，请稍后重试。",
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Button(
+                                onClick = { controller.refresh(accountId, includeOld = true) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColorsPrimary(),
+                            ) {
+                                Text("重新加载")
+                            }
+                        }
                     }
 
                     state.records.isEmpty() -> item {

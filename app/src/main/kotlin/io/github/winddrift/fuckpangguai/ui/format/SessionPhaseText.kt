@@ -12,3 +12,6 @@ fun sessionPhaseLabel(phase: String): String = when (phase) {
     SessionPhase.FAULT -> "设备异常"
     else -> phase
 }
+
+fun sessionStatusLabel(phase: String): String =
+    if (phase == SessionPhase.USING) "接水进行中" else sessionPhaseLabel(phase)

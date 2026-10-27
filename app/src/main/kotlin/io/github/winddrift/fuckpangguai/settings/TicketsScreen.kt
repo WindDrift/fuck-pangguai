@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -90,16 +90,18 @@ private fun TicketShopList(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            Text(
-                text = "按店铺汇总，共 ${tickets.size} 家店铺",
-                style = MiuixTheme.textStyles.footnote1,
-                color = colors.onSurfaceSecondary,
-            )
+        if (state.snapshot != null) {
+            item {
+                Text(
+                    text = "按店铺汇总，共 ${tickets.size} 家店铺",
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.onSurfaceSecondary,
+                )
+            }
         }
 
         when {
-            state.loading && state.snapshot == null -> item {
+            state.snapshot == null && state.loading -> item {
                 Text(
                     text = "正在加载通用小票…",
                     style = MiuixTheme.textStyles.body2,
@@ -111,6 +113,14 @@ private fun TicketShopList(
                 RefreshError(
                     message = state.error.orEmpty(),
                     onRetry = assetController::refresh,
+                )
+            }
+
+            state.snapshot == null -> item {
+                Text(
+                    text = "正在加载通用小票…",
+                    style = MiuixTheme.textStyles.body2,
+                    color = colors.onSurfaceSecondary,
                 )
             }
 
@@ -131,7 +141,12 @@ private fun TicketShopList(
             }
 
             else -> {
-                items(tickets) { ticket ->
+                itemsIndexed(
+                    items = tickets,
+                    key = { index, ticket ->
+                        ticket.shopId.ifBlank { ticket.id }.ifBlank { "shop-$index" }
+                    },
+                ) { _, ticket ->
                     TicketShopCard(
                         ticket = ticket,
                         onClick = { onSelectShop(ticket) },
@@ -147,15 +162,16 @@ private fun TicketShopList(
                         )
                     }
                 }
-                if (state.error != null) {
-                    item {
-                        Text(
-                            text = "刷新失败，已保留上次数据：${state.error}",
-                            style = MiuixTheme.textStyles.footnote1,
-                            color = colors.error,
-                        )
-                    }
-                }
+            }
+        }
+
+        if (state.snapshot != null && state.error != null) {
+            item {
+                Text(
+                    text = "刷新失败，已保留上次数据：${state.error}",
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.error,
+                )
             }
         }
     }
@@ -289,6 +305,7 @@ private fun TicketLogList(
                         text = when {
                             total > 0 -> "共 $total 条流水"
                             loading -> "正在加载流水…"
+                            error != null -> "流水加载失败"
                             else -> "暂无流水"
                         },
                         style = MiuixTheme.textStyles.footnote1,
@@ -303,7 +320,10 @@ private fun TicketLogList(
         }
 
         if (logs.isNotEmpty()) {
-            items(logs) { log ->
+            itemsIndexed(
+                items = logs,
+                key = { index, log -> log.stableKey(index) },
+            ) { _, log ->
                 TicketLogCard(log = log)
             }
         }
@@ -403,6 +423,13 @@ private fun RefreshError(
         }
     }
 }
+
+private fun TicketLog.stableKey(index: Int): String =
+    if (id != 0) {
+        "log-$shopId-$id"
+    } else {
+        "log-$shopId-$createdAt-$type-$subType-$amount-$index"
+    }
 
 private suspend fun loadLogs(
     assetController: AssetController,

@@ -258,19 +258,12 @@ fun TicketRechargeScreen(
                 RechargeStage.Verifying -> DisabledAction("正在核验支付结果…")
 
                 RechargeStage.Paid -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            onClick = onClose,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColorsPrimary(),
-                        ) {
-                            Text("查看流水")
-                        }
-                        TextButton(
-                            text = "完成",
-                            onClick = onClose,
-                            modifier = Modifier.weight(1f),
-                        )
+                    Button(
+                        onClick = onClose,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                    ) {
+                        Text("查看流水")
                     }
                 }
 
