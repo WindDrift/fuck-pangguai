@@ -78,6 +78,7 @@ import io.github.winddrift.fuckpangguai.ui.format.sessionPhaseLabel
 import io.github.winddrift.fuckpangguai.ui.navigation.MainTab
 import io.github.winddrift.fuckpangguai.ui.navigation.SecondaryPage
 import io.github.winddrift.fuckpangguai.ui.navigation.icon
+import io.github.winddrift.fuckpangguai.update.UpdateController
 import io.github.winddrift.fuckpangguai.using.UsingScreen
 import io.github.winddrift.fuckpangguai.water.SessionPhase
 import io.github.winddrift.fuckpangguai.water.WaterSession
@@ -111,6 +112,7 @@ fun PangguaiRoot(
     pointsController: PointsController,
     ticketRechargeController: TicketRechargeController,
     nfcTagStore: NfcTagStore,
+    updateController: UpdateController,
     onWarmUpLocation: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -173,6 +175,10 @@ fun PangguaiRoot(
             showEndSessionDialog = false
             showTicketLeaveDialog = false
         }
+    }
+
+    LaunchedEffect(state) {
+        if (state == AppState.Ready) updateController.checkOnStart()
     }
 
     LaunchedEffect(Unit) {

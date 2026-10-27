@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
                     pointsController = graph.pointsController,
                     ticketRechargeController = graph.ticketRechargeController,
                     nfcTagStore = graph.nfcTagStore,
+                    updateController = graph.updateController,
                     onWarmUpLocation = graph.locationProvider::warmUp,
                 )
             }

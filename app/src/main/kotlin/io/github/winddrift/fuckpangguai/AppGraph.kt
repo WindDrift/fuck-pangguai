@@ -29,6 +29,8 @@ import io.github.winddrift.fuckpangguai.location.LocationProvider
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
 import io.github.winddrift.fuckpangguai.storage.DeviceConfigStore
 import io.github.winddrift.fuckpangguai.storage.PlanCacheStore
+import io.github.winddrift.fuckpangguai.update.GithubReleaseSource
+import io.github.winddrift.fuckpangguai.update.UpdateController
 import io.github.winddrift.fuckpangguai.confirm.ConfirmController
 import io.github.winddrift.fuckpangguai.history.BillRepository
 import io.github.winddrift.fuckpangguai.history.HistoryController
@@ -124,6 +126,11 @@ class AppGraph(context: Context) {
     val waterRepository = WaterRepository(api)
     val nfcTagStore = NfcTagStore(appContext)
     val settingsStore = AppSettingsStore(appContext)
+    val updateController = UpdateController(
+        scope = scope,
+        source = GithubReleaseSource(),
+        currentVersion = BuildConfig.VERSION_NAME,
+    )
     val assetRepository = AssetRepository(
         api = api,
         accountStore = accountStore,

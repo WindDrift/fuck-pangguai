@@ -38,6 +38,10 @@
 | `PlanCacheStoreTest` | 7 天 TTL、50 条淘汰、账号隔离、损坏 JSON、旧写入拒绝、清理范围与序列化 |
 | `DeviceRepositoryTest` | 套餐/通道并行加载、缓存写入、channelKey 校验、预取失败静默、清理与在途写入竞态 |
 | `LocationCacheTest` | 位置内存缓存 TTL 与时间倒退 |
+| `ReleaseVersionTest` | `v` 前缀、带短哈希版本、语义化版本比较与非法输入 |
+| `ReleaseNotesTest` | Release Markdown 转纯文本：标题、列表、粗体、链接、图片、HTML、代码围栏与截断 |
+| `UpdateControllerTest` | 自动检查失败静默、手动失败原因、发现新版本、已是最新、进程内只检查一次与并发防重 |
+| `UpdateModelsTest` | GitHub Release JSON 解析、网络异常映射与中文错误文案 |
 
 运行：
 
