@@ -1,6 +1,7 @@
 package io.github.winddrift.fuckpangguai.history
 
 import android.app.DatePickerDialog
+import android.view.ContextThemeWrapper
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.input.KeyboardType
@@ -52,6 +54,7 @@ internal fun HistoryFilterSheet(
     if (!show) return
     val context = LocalContext.current
     val colors = MiuixTheme.colorScheme
+    val dark = colors.surface.luminance() < 0.5f
     var dateDialog by remember { mutableStateOf<DatePickerDialog?>(null) }
     DisposableEffect(Unit) {
         onDispose { dateDialog?.dismiss() }
@@ -62,8 +65,16 @@ internal fun HistoryFilterSheet(
         val initialDay = (if (forStart) filter.customStartEpochDay else filter.customEndEpochDay)
             ?.let(LocalDate::ofEpochDay)
             ?: today
-        val dialog = DatePickerDialog(
+        val dialogContext = ContextThemeWrapper(
             context,
+            if (dark) {
+                android.R.style.Theme_DeviceDefault_Dialog_Alert
+            } else {
+                android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
+            },
+        )
+        val dialog = DatePickerDialog(
+            dialogContext,
             { _, year, month, day ->
                 val picked = LocalDate.of(year, month + 1, day).toEpochDay()
                 onUpdate { current ->

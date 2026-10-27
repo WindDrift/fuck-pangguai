@@ -85,10 +85,10 @@ internal fun HistoryFilterHeader(
                         text = filter.activeCategoryCount.toString(),
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .background(colors.error, CircleShape)
+                            .background(colors.primary, CircleShape)
                             .padding(horizontal = 5.dp, vertical = 1.dp),
                         style = MiuixTheme.textStyles.footnote1,
-                        color = colors.onError,
+                        color = colors.onPrimary,
                     )
                 }
             }

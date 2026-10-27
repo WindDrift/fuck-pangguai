@@ -65,7 +65,7 @@ private fun AvatarFallback(
         Text(
             text = initial,
             style = MiuixTheme.textStyles.title3,
-            color = colors.onSurface,
+            color = colors.onPrimaryContainer,
         )
     }
 }

@@ -431,7 +431,11 @@ private fun RewardCard(
             Text(
                 text = "到账 ${reward.reach} 点",
                 style = MiuixTheme.textStyles.footnote1,
-                color = colors.onSurfaceSecondary,
+                color = if (selected) {
+                    colors.onPrimaryContainer.copy(alpha = 0.72f)
+                } else {
+                    colors.onSurfaceSecondary
+                },
                 textAlign = TextAlign.Center,
             )
         }
