@@ -24,6 +24,8 @@ import io.github.winddrift.fuckpangguai.account.AssetController
 import io.github.winddrift.fuckpangguai.account.StoredAccount
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import io.github.winddrift.fuckpangguai.history.toCsv
+import io.github.winddrift.fuckpangguai.nfc.NfcAvailability
+import io.github.winddrift.fuckpangguai.nfc.rememberNfcAvailability
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
 import io.github.winddrift.fuckpangguai.storage.AppThemeMode
 import io.github.winddrift.fuckpangguai.storage.ThemeSettings
@@ -41,6 +43,7 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Promotions
+import top.yukonga.miuix.kmp.icon.extended.SearchDevice
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
@@ -54,6 +57,7 @@ fun SettingsScreen(
     accounts: List<StoredAccount>,
     activeAccount: StoredAccount?,
     onOpenAbout: () -> Unit,
+    onOpenNfcTags: () -> Unit,
     onOpenTickets: () -> Unit,
     onAddAccount: () -> Unit,
     onSwitchAccount: (String) -> Unit,
@@ -67,6 +71,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
+    val nfc = rememberNfcAvailability()
     val themeSettings by settingsStore.themeSettings
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
     val skipDeviceInfo by settingsStore.skipDeviceInfo
@@ -223,6 +228,25 @@ fun SettingsScreen(
                     title = "跳过设备信息",
                     summary = "识别成功后直接进入确认设备页，可配合一键解锁实现扫码即开",
                 )
+                if (nfc != NfcAvailability.Unsupported) {
+                    PreferenceDivider()
+                    ArrowPreference(
+                        title = "管理 NFC 标签",
+                        summary = if (nfc == NfcAvailability.Disabled) {
+                            "NFC 未开启，仍可管理已绑定标签"
+                        } else {
+                            "查看和删除本机的标签绑定"
+                        },
+                        startAction = {
+                            Icon(
+                                imageVector = MiuixIcons.SearchDevice,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 12.dp),
+                            )
+                        },
+                        onClick = onOpenNfcTags,
+                    )
+                }
                 PreferenceDivider()
                 SwitchPreference(
                     checked = !autoStartCamera,

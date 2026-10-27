@@ -80,7 +80,7 @@ cp secrets.properties.example secrets.properties
 | [积分与自动积分](docs/points.md) | 积分页、签到、自动运行规则、任务跳过原因与账号风险边界 |
 | [构建指南](docs/build.md) | 环境、凭据配置、构建、测试与排错 |
 | [发布指南](docs/release.md) | 签名、CI Secret、版本与发布流程 |
-| [调试指南](docs/debug.md) | 演练模式、隐藏诊断页、请求日志与 NFC 映射 |
+| [调试指南](docs/debug.md) | 演练模式、隐藏诊断页与请求日志 |
 | [架构说明](docs/architecture.md) | 技术栈、模块职责、数据流与存储 |
 | [测试与验收](docs/testing.md) | 单元测试、多账号/资产真机验收清单与回归范围 |
 | [常见问题](docs/faq.md) | 构建、登录、多账号、资产、设备、支付与数据问题 |

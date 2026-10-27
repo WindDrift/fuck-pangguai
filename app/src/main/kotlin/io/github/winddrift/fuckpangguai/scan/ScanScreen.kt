@@ -63,6 +63,7 @@ import io.github.winddrift.fuckpangguai.account.StoredAccount
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import io.github.winddrift.fuckpangguai.nfc.NfcAvailability
 import io.github.winddrift.fuckpangguai.nfc.NfcReader
+import io.github.winddrift.fuckpangguai.nfc.openNfcSettings
 import io.github.winddrift.fuckpangguai.nfc.rememberNfcAvailability
 import io.github.winddrift.fuckpangguai.ui.animation.ColorSpringSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
@@ -317,7 +318,11 @@ fun ScanScreen(
                         "NFC 未开启，点此开启"
                     },
                     onClick = if (nfc == NfcAvailability.Disabled) {
-                        { openNfcSettings(context, snackbar) }
+                        {
+                            if (!openNfcSettings(context)) {
+                                snackbar.show("无法打开 NFC 设置", isError = true)
+                            }
+                        }
                     } else {
                         null
                     },
@@ -671,17 +676,5 @@ private fun openAlipay(
     }.isSuccess
     if (!ok) {
         snackbar.show("无法打开支付宝", isError = true)
-    }
-}
-
-private fun openNfcSettings(
-    context: android.content.Context,
-    snackbar: AppSnackbarState,
-) {
-    val ok = runCatching {
-        context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
-    }.isSuccess
-    if (!ok) {
-        snackbar.show("无法打开 NFC 设置", isError = true)
     }
 }

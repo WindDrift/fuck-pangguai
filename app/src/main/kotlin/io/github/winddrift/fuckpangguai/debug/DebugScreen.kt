@@ -17,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -25,12 +24,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.BuildConfig
 import io.github.winddrift.fuckpangguai.net.RequestLog
 import io.github.winddrift.fuckpangguai.net.dto.GoodsDetail
-import io.github.winddrift.fuckpangguai.nfc.NfcTagBinding
-import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
 import io.github.winddrift.fuckpangguai.scan.ScanController
 import io.github.winddrift.fuckpangguai.scan.ScanState
 import io.github.winddrift.fuckpangguai.storage.AppSettingsStore
-import io.github.winddrift.fuckpangguai.ui.components.ConfirmDialog
 import io.github.winddrift.fuckpangguai.ui.components.KeyValueRow
 import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
@@ -39,19 +35,16 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Copy
-import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun DebugScreen(
     settingsStore: AppSettingsStore,
-    nfcTagStore: NfcTagStore,
     scanController: ScanController,
     onImportToken: (String) -> Unit,
     scrollBehavior: ScrollBehavior? = null,
@@ -61,12 +54,9 @@ fun DebugScreen(
     val scope = rememberCoroutineScope()
     val entries by RequestLog.entries.collectAsStateWithLifecycle()
     val scanState by scanController.state.collectAsStateWithLifecycle()
-    var mappings by remember { mutableStateOf<List<NfcTagBinding>>(emptyList()) }
     var dryRun by remember { mutableStateOf(true) }
-    var pendingMapping by remember { mutableStateOf<NfcTagBinding?>(null) }
 
     LaunchedEffect(Unit) {
-        mappings = nfcTagStore.load()
         dryRun = settingsStore.isDryRun()
     }
 
@@ -171,36 +161,6 @@ fun DebugScreen(
         }
 
         item {
-            PreferenceGroup(title = "NFC 标签映射") {
-                if (mappings.isEmpty()) {
-                    BasicComponent(
-                        title = "暂无绑定",
-                        summary = "在扫码页碰一下 NFC 标签，再扫描设备码即可绑定。",
-                    )
-                } else {
-                    mappings.forEachIndexed { index, mapping ->
-                        if (index > 0) PreferenceDivider()
-                        BasicComponent(
-                            title = mapping.tagId,
-                            summary = "${mapping.sn} · ${mapping.deviceName.ifBlank { "饮水机" }}",
-                            endActions = {
-                                IconButton(
-                                    onClick = { pendingMapping = mapping },
-                                    backgroundColor = Color.Transparent,
-                                ) {
-                                    Icon(
-                                        imageVector = MiuixIcons.Delete,
-                                        contentDescription = "删除该映射",
-                                    )
-                                }
-                            },
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
             PreferenceGroup(title = "最近请求") {
                 if (entries.isEmpty()) {
                     BasicComponent(
@@ -261,25 +221,4 @@ fun DebugScreen(
             }
         }
     }
-
-    ConfirmDialog(
-        show = pendingMapping != null,
-        title = "删除该 NFC 映射？",
-        summary = pendingMapping?.let { "${it.tagId} → ${it.sn}" },
-        confirmText = "删除",
-        destructive = true,
-        onConfirm = {
-            val mapping = pendingMapping ?: return@ConfirmDialog
-            scope.launch {
-                runCatching { nfcTagStore.remove(mapping.tagId) }
-                    .onSuccess {
-                        mappings = nfcTagStore.load()
-                        snackbar.show("映射已删除")
-                    }
-                    .onFailure { snackbar.show("删除失败", isError = true) }
-            }
-            pendingMapping = null
-        },
-        onDismiss = { pendingMapping = null },
-    )
 }

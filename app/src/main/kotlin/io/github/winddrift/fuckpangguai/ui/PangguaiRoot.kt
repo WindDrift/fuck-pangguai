@@ -56,6 +56,7 @@ import io.github.winddrift.fuckpangguai.history.HistoryController
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import io.github.winddrift.fuckpangguai.history.HistoryScreen
 import io.github.winddrift.fuckpangguai.nfc.NfcTagStore
+import io.github.winddrift.fuckpangguai.nfc.NfcTagsScreen
 import io.github.winddrift.fuckpangguai.points.PointsController
 import io.github.winddrift.fuckpangguai.points.PointsScreen
 import io.github.winddrift.fuckpangguai.scan.ScanController
@@ -159,6 +160,7 @@ fun PangguaiRoot(
     val pointsScrollBehavior = MiuixScrollBehavior()
     val settingsScrollBehavior = MiuixScrollBehavior()
     val debugScrollBehavior = MiuixScrollBehavior()
+    val nfcTagsScrollBehavior = MiuixScrollBehavior()
     val density = LocalDensity.current
     var floatingNavHeightPx by remember { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -309,6 +311,7 @@ fun PangguaiRoot(
             state = confirmState,
         )
         currentSecondary is SecondaryPage.About -> RootDestination.About
+        currentSecondary is SecondaryPage.NfcTags -> RootDestination.NfcTags
         currentSecondary is SecondaryPage.Debug -> RootDestination.Debug
         currentSecondary is SecondaryPage.AccountAccess ->
             RootDestination.AccountAccess(currentSecondary.target)
@@ -342,6 +345,10 @@ fun PangguaiRoot(
             debugScrollBehavior.state.heightOffset = 0f
             debugScrollBehavior.state.contentOffset = 0f
         }
+        if (destination != RootDestination.NfcTags) {
+            nfcTagsScrollBehavior.state.heightOffset = 0f
+            nfcTagsScrollBehavior.state.contentOffset = 0f
+        }
     }
 
     val topBarKind = when {
@@ -349,6 +356,7 @@ fun PangguaiRoot(
         state != AppState.Ready -> RootTopBar.None
         currentSecondary is SecondaryPage.Confirm -> RootTopBar.Confirm
         currentSecondary is SecondaryPage.About -> RootTopBar.None
+        currentSecondary is SecondaryPage.NfcTags -> RootTopBar.NfcTags
         currentSecondary is SecondaryPage.Debug -> RootTopBar.Debug
         currentSecondary is SecondaryPage.AccountAccess -> RootTopBar.AccountAccess
         currentSecondary is SecondaryPage.Tickets -> RootTopBar.Tickets
@@ -420,6 +428,11 @@ fun PangguaiRoot(
                             "诊断",
                             onBack = { closeSecondary() },
                             scrollBehavior = debugScrollBehavior,
+                        )
+                        RootTopBar.NfcTags -> AppTopBar(
+                            "管理 NFC 标签",
+                            onBack = { closeSecondary() },
+                            scrollBehavior = nfcTagsScrollBehavior,
                         )
                         RootTopBar.AccountAccess -> AppTopBar(
                             accountAccessTitle,
@@ -591,7 +604,6 @@ fun PangguaiRoot(
 
                         RootDestination.Debug -> DebugScreen(
                             settingsStore = settingsStore,
-                            nfcTagStore = nfcTagStore,
                             scanController = scanController,
                             onImportToken = controller::importToken,
                             scrollBehavior = debugScrollBehavior,
@@ -603,6 +615,15 @@ fun PangguaiRoot(
                             onShowUpdate = { showUpdateSheet = true },
                             onOpenDebug = { secondary = SecondaryPage.Debug(backToAbout = true) },
                             onBack = ::closeSecondary,
+                        )
+
+                        RootDestination.NfcTags -> NfcTagsScreen(
+                            nfcTagStore = nfcTagStore,
+                            onScan = {
+                                secondary = null
+                                tab = MainTab.Scan
+                            },
+                            scrollBehavior = nfcTagsScrollBehavior,
                         )
 
                         RootDestination.History -> HistoryScreen(
@@ -626,6 +647,7 @@ fun PangguaiRoot(
                             accounts = accounts,
                             activeAccount = activeAccount,
                             onOpenAbout = { secondary = SecondaryPage.About },
+                            onOpenNfcTags = { secondary = SecondaryPage.NfcTags },
                             onOpenTickets = { secondary = SecondaryPage.Tickets() },
                             onAddAccount = {
                                 controller.beginAddAccount()
@@ -713,6 +735,7 @@ private sealed interface RootDestination {
         override val tabOrder: Int = 3
     }
     data object About : RootDestination
+    data object NfcTags : RootDestination
     data object Debug : RootDestination
     data class AccountAccess(val target: AuthTarget) : RootDestination {
         override val contentKey: Any = "AccountAccess"
@@ -739,6 +762,7 @@ private sealed interface RootTopBar {
     data object Using : RootTopBar
     data object Confirm : RootTopBar
     data object Debug : RootTopBar
+    data object NfcTags : RootTopBar
     data object AccountAccess : RootTopBar
     data object Tickets : RootTopBar
     data object TicketRecharge : RootTopBar
@@ -797,6 +821,7 @@ private fun rootTransition(
     if (target is RootDestination.Confirm ||
         target is RootDestination.Debug ||
         target is RootDestination.About ||
+        target is RootDestination.NfcTags ||
         target is RootDestination.AccountAccess ||
         target is RootDestination.Tickets ||
         target is RootDestination.TicketRecharge
@@ -807,6 +832,7 @@ private fun rootTransition(
     if (initial is RootDestination.Confirm ||
         initial is RootDestination.Debug ||
         initial is RootDestination.About ||
+        initial is RootDestination.NfcTags ||
         initial is RootDestination.AccountAccess ||
         initial is RootDestination.Tickets ||
         initial is RootDestination.TicketRecharge

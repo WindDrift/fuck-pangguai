@@ -27,6 +27,7 @@ val MainTab.icon: ImageVector
 sealed interface SecondaryPage {
     data class Confirm(val device: ResolvedDevice) : SecondaryPage
     data object About : SecondaryPage
+    data object NfcTags : SecondaryPage
     data class Debug(val backToAbout: Boolean = false) : SecondaryPage
     data class AccountAccess(val target: AuthTarget) : SecondaryPage
     data class Tickets(val shopId: String = "", val shopName: String = "") : SecondaryPage
