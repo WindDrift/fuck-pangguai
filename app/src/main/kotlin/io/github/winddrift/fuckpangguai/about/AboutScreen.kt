@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
@@ -126,6 +128,32 @@ fun AboutScreen(
             .fillMaxSize()
             .background(colors.surface),
     ) {
+        if (progress < 0.99f) {
+            Os3FluidBackground(
+                dark = dark,
+                playing = progress < 0.99f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(heroHeight + 80.dp)
+                    .graphicsLayer {
+                        alpha = (1f - progress * 1.2f).coerceIn(0f, 1f)
+                    },
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(120.dp)
+                .offset(y = heroHeight - 40.dp)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, colors.surface),
+                    ),
+                ),
+        )
+
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
