@@ -381,6 +381,37 @@ class ConfirmControllerTest {
         val timing = deps.timingSink.entries.single()
         assertEquals(UnlockOutcome.Failed, timing.outcome)
         assertEquals("ApiException--1", timing.errorKind)
+        assertTrue(deps.waterSource.msgSyncCalls > 9)
+    }
+
+    @Test
+    fun `fast polling detects readiness within one second`() = runTest {
+        val deps = Deps()
+        deps.waterSource.readyAfterCalls = 4
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(4, deps.waterSource.msgSyncCalls)
+        assertTrue(testScheduler.currentTime < 1_000)
+    }
+
+    @Test
+    fun `polling falls back to one second after the fast window`() = runTest {
+        val deps = Deps()
+        deps.waterSource.readyAfterCalls = 12
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(12, deps.waterSource.msgSyncCalls)
+        assertEquals(5_000L, testScheduler.currentTime)
     }
 
     @Test

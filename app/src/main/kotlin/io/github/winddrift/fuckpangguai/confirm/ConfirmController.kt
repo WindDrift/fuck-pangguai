@@ -477,12 +477,17 @@ class ConfirmController(
         }
         val startedAt = clock()
         var polls = 0
-        val ready = withTimeoutOrNull(15_000) {
+        val ready = withTimeoutOrNull(POLL_TIMEOUT_MS) {
             while (true) {
                 polls += 1
                 val bean = waterRepository.msgSync(unlock.msgId)
                 if (waterRepository.isDeviceReady(bean)) return@withTimeoutOrNull true
-                delay(1_000)
+                val interval = if (polls < FAST_POLL_COUNT) {
+                    FAST_POLL_INTERVAL_MS
+                } else {
+                    SLOW_POLL_INTERVAL_MS
+                }
+                delay(interval)
             }
             @Suppress("UNREACHABLE_CODE")
             false
@@ -562,5 +567,11 @@ class ConfirmController(
     private companion object {
         /** 回退开关：关闭后恢复“点击时才绑定通道”的旧行为。 */
         const val PREBIND_ENABLED = true
+        const val POLL_TIMEOUT_MS = 15_000L
+
+        /** 前 9 次请求覆盖约 2 秒（首轮立即，随后 8 个 250ms 间隔）。 */
+        const val FAST_POLL_COUNT = 9
+        const val FAST_POLL_INTERVAL_MS = 250L
+        const val SLOW_POLL_INTERVAL_MS = 1_000L
     }
 }
