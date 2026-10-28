@@ -20,8 +20,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 internal fun HistorySummaryCard(
     summary: HistorySummary,
-    conversion: WaterConversion? = null,
     modifier: Modifier = Modifier,
+    conversion: WaterConversion? = null,
 ) {
     val colors = MiuixTheme.colorScheme
     SectionCard(
