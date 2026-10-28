@@ -1,6 +1,9 @@
 package io.github.winddrift.fuckpangguai.history
 
 import io.github.winddrift.fuckpangguai.water.SessionPhase
+import io.github.winddrift.fuckpangguai.water.WaterConversion
+import io.github.winddrift.fuckpangguai.water.formatWaterVolume
+import io.github.winddrift.fuckpangguai.water.parsePureUsage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -66,6 +69,92 @@ class HistorySummaryTest {
         assertNull(summary.totalUsage)
         assertNull(summary.usagePerYuan)
         assertEquals("—", formatSummaryUsage(summary.totalUsage))
+    }
+
+    @Test
+    fun `water total merges pure usage and unit records`() {
+        val records = listOf(
+            record(amount = "100", bill = bill(orderStatus = 2, originalAmount = "2.00")),
+            record(amount = "1.2L", bill = bill(orderStatus = 2, originalAmount = "3.00")),
+            record(amount = "300ml", bill = bill(orderStatus = 3, originalAmount = "1.00")),
+            record(amount = "30分钟", bill = bill(orderStatus = 2, originalAmount = "4.00")),
+            record(amount = "50", bill = bill(orderStatus = 2, originalAmount = "2.00")),
+            record(amount = "1.5L", billState = BillState.UNMATCHED, bill = null),
+        )
+        val conversion = WaterConversion(
+            usageBase = BigDecimal("100"),
+            waterMl = BigDecimal("500"),
+            cupMl = BigDecimal("250"),
+        )
+
+        val summary = records.summarizeHistory(conversion)
+
+        assertEquals(6, summary.visibleCount)
+        assertEquals(5, summary.spendCoverage)
+        assertEquals(2, summary.usageCoverage)
+        assertEquals(2, summary.averageCoverage)
+        assertEquals(5, summary.waterCoverage)
+        assertEquals(4, summary.waterAverageCoverage)
+        assertEquals(0, summary.totalSpend!!.compareTo(BigDecimal("12.00")))
+        assertEquals(0, summary.totalUsage!!.compareTo(BigDecimal("150")))
+        assertEquals(0, summary.totalWaterMl!!.compareTo(BigDecimal("3750")))
+        assertEquals(BigDecimal("37.50"), summary.usagePerYuan)
+        assertEquals(BigDecimal("281.25"), summary.waterPerYuanMl)
+        assertEquals("150", formatSummaryUsage(summary.totalUsage))
+        assertEquals("3.75 L", formatWaterVolume(summary.totalWaterMl))
+        assertEquals(
+            "1 元 ≈ 37.50 用量 · 281 mL · 约 1.1 杯",
+            formatSummaryAverage(summary.usagePerYuan, summary.waterPerYuanMl, BigDecimal("250")),
+        )
+    }
+
+    @Test
+    fun `unit tagged records alone contribute to water but not usage`() {
+        val summary = listOf(
+            record(amount = "1.2L", bill = bill(orderStatus = 2, originalAmount = "2.00")),
+            record(amount = "300ml", bill = bill(orderStatus = 2, originalAmount = "1.00")),
+        ).summarizeHistory(
+            WaterConversion(
+                usageBase = BigDecimal("100"),
+                waterMl = BigDecimal("500"),
+                cupMl = null,
+            ),
+        )
+
+        assertNull(summary.totalUsage)
+        assertEquals(0, summary.totalWaterMl!!.compareTo(BigDecimal("1500")))
+        assertEquals(2, summary.waterCoverage)
+        assertNull(summary.usagePerYuan)
+        assertEquals(BigDecimal("500.00"), summary.waterPerYuanMl)
+        assertEquals("—", formatSummaryUsage(summary.totalUsage))
+    }
+
+    @Test
+    fun `conversion off leaves water fields empty`() {
+        val summary = listOf(record(amount = "100")).summarizeHistory()
+
+        assertNull(summary.totalWaterMl)
+        assertEquals(0, summary.waterCoverage)
+        assertEquals(0, summary.waterAverageCoverage)
+        assertNull(summary.waterPerYuanMl)
+    }
+
+    @Test
+    fun `summary average includes water and cups when configured`() {
+        val summary = listOf(
+            record(amount = "100", bill = bill(orderStatus = 2, originalAmount = "1.00")),
+        ).summarizeHistory(
+            WaterConversion(
+                usageBase = BigDecimal("100"),
+                waterMl = BigDecimal("500"),
+                cupMl = BigDecimal("250"),
+            ),
+        )
+
+        assertEquals(
+            "1 元 ≈ 100.00 用量 · 500 mL · 约 2 杯",
+            formatSummaryAverage(summary.usagePerYuan, summary.waterPerYuanMl, BigDecimal("250")),
+        )
     }
 
     @Test

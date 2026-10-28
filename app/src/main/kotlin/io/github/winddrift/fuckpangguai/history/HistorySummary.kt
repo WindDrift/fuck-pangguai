@@ -1,5 +1,9 @@
 package io.github.winddrift.fuckpangguai.history
 
+import io.github.winddrift.fuckpangguai.water.WaterConversion
+import io.github.winddrift.fuckpangguai.water.formatCupCount
+import io.github.winddrift.fuckpangguai.water.formatWaterVolume
+import io.github.winddrift.fuckpangguai.water.parsePureUsage
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -11,20 +15,32 @@ internal data class HistorySummary(
     val totalSpend: BigDecimal?,
     val totalUsage: BigDecimal?,
     val usagePerYuan: BigDecimal?,
+    val waterCoverage: Int = 0,
+    val waterAverageCoverage: Int = 0,
+    val totalWaterMl: BigDecimal? = null,
+    val waterPerYuanMl: BigDecimal? = null,
 )
 
-internal fun List<HistoryRecord>.summarizeHistory(): HistorySummary {
+internal fun List<HistoryRecord>.summarizeHistory(
+    conversion: WaterConversion? = null,
+): HistorySummary {
     var spendCoverage = 0
     var usageCoverage = 0
     var averageCoverage = 0
+    var waterCoverage = 0
+    var waterAverageCoverage = 0
     var totalSpend = BigDecimal.ZERO
     var totalUsage = BigDecimal.ZERO
+    var totalWaterMl = BigDecimal.ZERO
     var sameSpend = BigDecimal.ZERO
     var sameUsage = BigDecimal.ZERO
+    var sameWaterSpend = BigDecimal.ZERO
+    var sameWaterMl = BigDecimal.ZERO
 
     forEach { record ->
         val original = record.countedOriginalAmount()
         val usage = parsePureUsage(record.amount)
+        val volume = conversion?.convert(record.amount)?.volumeMl
         if (original != null) {
             spendCoverage++
             totalSpend = totalSpend.add(original)
@@ -38,6 +54,15 @@ internal fun List<HistoryRecord>.summarizeHistory(): HistorySummary {
             sameSpend = sameSpend.add(original)
             sameUsage = sameUsage.add(usage)
         }
+        if (volume != null) {
+            waterCoverage++
+            totalWaterMl = totalWaterMl.add(volume)
+        }
+        if (original != null && volume != null) {
+            waterAverageCoverage++
+            sameWaterSpend = sameWaterSpend.add(original)
+            sameWaterMl = sameWaterMl.add(volume)
+        }
     }
 
     val average = if (averageCoverage > 0 &&
@@ -48,26 +73,28 @@ internal fun List<HistoryRecord>.summarizeHistory(): HistorySummary {
     } else {
         null
     }
+    val waterAverage = if (waterAverageCoverage > 0 &&
+        sameWaterSpend > BigDecimal.ZERO &&
+        sameWaterMl > BigDecimal.ZERO
+    ) {
+        sameWaterMl.divide(sameWaterSpend, 2, RoundingMode.HALF_UP)
+    } else {
+        null
+    }
 
     return HistorySummary(
         visibleCount = size,
         spendCoverage = spendCoverage,
         usageCoverage = usageCoverage,
         averageCoverage = averageCoverage,
+        waterCoverage = waterCoverage,
+        waterAverageCoverage = waterAverageCoverage,
         totalSpend = totalSpend.takeIf { spendCoverage > 0 },
         totalUsage = totalUsage.takeIf { usageCoverage > 0 },
+        totalWaterMl = totalWaterMl.takeIf { waterCoverage > 0 },
         usagePerYuan = average,
+        waterPerYuanMl = waterAverage,
     )
-}
-
-/**
- * 统计只接受纯数字用量，避免把 1.2L 与 30 分钟相加。
- * 前后空格允许，单位后缀、逗号、负数和科学计数法都不算有效用量。
- */
-internal fun parsePureUsage(raw: String): BigDecimal? {
-    val value = raw.trim()
-    if (!pureUsagePattern.matches(value)) return null
-    return value.toBigDecimalOrNull()?.takeIf { it >= BigDecimal.ZERO }
 }
 
 internal fun formatSummaryMoney(value: BigDecimal?): String =
@@ -83,8 +110,22 @@ internal fun formatSummaryUsage(value: BigDecimal?): String {
     return rounded.stripTrailingZeros().toPlainString()
 }
 
-internal fun formatSummaryAverage(value: BigDecimal?): String =
-    value?.let { "1 元 ≈ ${it.setScale(2, RoundingMode.HALF_UP).toPlainString()} 用量" } ?: "—"
+internal fun formatSummaryAverage(
+    usagePerYuan: BigDecimal?,
+    waterPerYuanMl: BigDecimal? = null,
+    cupMl: BigDecimal? = null,
+): String {
+    val parts = mutableListOf<String>()
+    usagePerYuan?.let {
+        parts += "${it.setScale(2, RoundingMode.HALF_UP).toPlainString()} 用量"
+    }
+    waterPerYuanMl?.let {
+        parts += formatWaterVolume(it)
+        cupMl?.let { cup -> formatCupCount(it, cup)?.let(parts::add) }
+    }
+    if (parts.isEmpty()) return "—"
+    return "1 元 ≈ ${parts.joinToString(" · ")}"
+}
 
 private fun HistoryRecord.countedOriginalAmount(): BigDecimal? {
     if (billState != BillState.MATCHED) return null
@@ -92,5 +133,3 @@ private fun HistoryRecord.countedOriginalAmount(): BigDecimal? {
     if (bill.orderStatus != 2 && bill.orderStatus != 3) return null
     return parseAmount(bill.originalAmount)?.takeIf { it >= BigDecimal.ZERO }
 }
-
-private val pureUsagePattern = Regex("""^\s*(?:\d+(?:\.\d+)?|\.\d+)\s*$""")

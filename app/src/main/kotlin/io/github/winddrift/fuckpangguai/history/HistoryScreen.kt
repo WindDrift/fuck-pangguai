@@ -46,6 +46,8 @@ import io.github.winddrift.fuckpangguai.ui.components.PhaseBadge
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
 import io.github.winddrift.fuckpangguai.ui.format.sessionPhaseLabel
+import io.github.winddrift.fuckpangguai.water.WaterConversion
+import io.github.winddrift.fuckpangguai.water.formatAmountWithWater
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -69,6 +71,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 fun HistoryScreen(
     controller: HistoryController,
     accountId: String?,
+    waterConversion: WaterConversion? = null,
     scrollBehavior: ScrollBehavior? = null,
     bottomContentPadding: Dp = 0.dp,
 ) {
@@ -85,8 +88,8 @@ fun HistoryScreen(
     val visibleRecords = remember(state.records, state.filter) {
         state.records.applyHistoryFilter(state.filter, System.currentTimeMillis())
     }
-    val summary = remember(visibleRecords) {
-        visibleRecords.summarizeHistory()
+    val summary = remember(visibleRecords, waterConversion) {
+        visibleRecords.summarizeHistory(waterConversion)
     }
     val deviceOptions = remember(state.records) {
         state.records.map { it.deviceName }
@@ -144,6 +147,7 @@ fun HistoryScreen(
             if (visibleRecords.isNotEmpty()) {
                 HistorySummaryCard(
                     summary = summary,
+                    conversion = waterConversion,
                     modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
                 )
             }
@@ -259,6 +263,7 @@ fun HistoryScreen(
                 items(visibleRecords, key = { it.id }) { record ->
                     HistoryCard(
                         record = record,
+                        waterConversion = waterConversion,
                         syncing = state.syncingIds.contains(record.id),
                         modifier = Modifier.animateItem(
                             fadeInSpec = ContentFadeSpec,
@@ -310,7 +315,7 @@ fun HistoryScreen(
                     KeyValueRow("时间", formatHistoryTime(record.updatedAt))
                     KeyValueRow("状态", sessionPhaseLabel(record.phase))
                     if (record.amount.isNotBlank()) {
-                        KeyValueRow("用量", record.amount)
+                        KeyValueRow("用量", formatAmountWithWater(record.amount, waterConversion))
                     }
                     if (record.displayOrderNo().isNotBlank()) {
                         KeyValueRow("订单", record.displayOrderNo())
@@ -379,6 +384,7 @@ fun HistoryScreen(
 @Composable
 private fun HistoryCard(
     record: HistoryRecord,
+    waterConversion: WaterConversion?,
     syncing: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
@@ -434,7 +440,7 @@ private fun HistoryCard(
                 PhaseBadge(record.phase)
                 if (record.amount.isNotBlank()) {
                     Text(
-                        text = "用量 ${record.amount}",
+                        text = "用量 ${formatAmountWithWater(record.amount, waterConversion)}",
                         style = MiuixTheme.textStyles.footnote1,
                         color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     )

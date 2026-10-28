@@ -11,12 +11,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
+import io.github.winddrift.fuckpangguai.water.WaterConversion
+import io.github.winddrift.fuckpangguai.water.formatCupCount
+import io.github.winddrift.fuckpangguai.water.formatWaterVolume
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun HistorySummaryCard(
     summary: HistorySummary,
+    conversion: WaterConversion? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = MiuixTheme.colorScheme
@@ -24,10 +28,73 @@ internal fun HistorySummaryCard(
         modifier = modifier,
         title = "筛选结果统计",
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
+        if (conversion == null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                SummaryMetric(
+                    title = "总花费",
+                    note = "按原价",
+                    value = formatSummaryMoney(summary.totalSpend),
+                    detail = "已支付且已匹配 ${summary.spendCoverage}/${summary.visibleCount} 笔",
+                    valueColor = if (summary.totalSpend == null) {
+                        colors.onSurfaceSecondary
+                    } else {
+                        colors.primary
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                SummaryMetric(
+                    title = "总用量",
+                    note = "未标单位",
+                    value = formatSummaryUsage(summary.totalUsage),
+                    detail = "可解析 ${summary.usageCoverage}/${summary.visibleCount} 笔",
+                    valueColor = if (summary.totalUsage == null) {
+                        colors.onSurfaceSecondary
+                    } else {
+                        colors.onSurface
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            PreferenceDivider()
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "平均单价",
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = colors.onSurfaceSecondary,
+                    )
+                    Text(
+                        text = formatSummaryAverage(summary.usagePerYuan),
+                        style = MiuixTheme.textStyles.body1,
+                        color = if (summary.usagePerYuan == null) {
+                            colors.onSurfaceSecondary
+                        } else {
+                            colors.primary
+                        },
+                    )
+                }
+                Text(
+                    text = "同口径 ${summary.averageCoverage}/${summary.visibleCount} 笔",
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.onSurfaceSecondary,
+                )
+            }
+
+            Text(
+                text = "总花费按已支付且已匹配账单的原价，排除退款；总用量只汇总纯数字，未标单位。",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+        } else {
             SummaryMetric(
                 title = "总花费",
                 note = "按原价",
@@ -38,59 +105,118 @@ internal fun HistorySummaryCard(
                 } else {
                     colors.primary
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
             )
-            SummaryMetric(
-                title = "总用量",
-                note = "未标单位",
-                value = formatSummaryUsage(summary.totalUsage),
-                detail = "可解析 ${summary.usageCoverage}/${summary.visibleCount} 笔",
-                valueColor = if (summary.totalUsage == null) {
-                    colors.onSurfaceSecondary
-                } else {
-                    colors.onSurface
-                },
-                modifier = Modifier.weight(1f),
-            )
-        }
 
-        PreferenceDivider()
+            PreferenceDivider()
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+            TotalUsageMetric(summary = summary, conversion = conversion)
+
+            PreferenceDivider()
+
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = "平均单价",
                     style = MiuixTheme.textStyles.footnote1,
                     color = colors.onSurfaceSecondary,
                 )
                 Text(
-                    text = formatSummaryAverage(summary.usagePerYuan),
+                    text = formatSummaryAverage(
+                        usagePerYuan = summary.usagePerYuan,
+                        waterPerYuanMl = summary.waterPerYuanMl,
+                        cupMl = conversion.cupMl,
+                    ),
                     style = MiuixTheme.textStyles.body1,
-                    color = if (summary.usagePerYuan == null) {
+                    color = if (summary.usagePerYuan == null && summary.waterPerYuanMl == null) {
                         colors.onSurfaceSecondary
                     } else {
                         colors.primary
                     },
                 )
+                Text(
+                    text = averageCoverageText(summary),
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = colors.onSurfaceSecondary,
+                )
             }
+
             Text(
-                text = "同口径 ${summary.averageCoverage}/${summary.visibleCount} 笔",
+                text = "总花费按已支付且已匹配账单的原价，排除退款；总用量只汇总纯数字；" +
+                    "总水量包含纯数字换算与带 L/mL 的记录；平均单价分别按各自口径计算。",
                 style = MiuixTheme.textStyles.footnote1,
                 color = colors.onSurfaceSecondary,
             )
         }
+    }
+}
 
+@Composable
+private fun TotalUsageMetric(
+    summary: HistorySummary,
+    conversion: WaterConversion,
+) {
+    val colors = MiuixTheme.colorScheme
+    val waterDetail = summary.totalWaterMl?.let { ml ->
+        buildList {
+            add(formatWaterVolume(ml))
+            conversion.cupMl?.let { cup -> formatCupCount(ml, cup)?.let(::add) }
+        }.joinToString(" · ")
+    }
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = "总用量",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+            Text(
+                text = "原始用量",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+        }
         Text(
-            text = "总花费按已支付且已匹配账单的原价，排除退款；总用量只汇总纯数字，未标单位。",
+            text = formatSummaryUsage(summary.totalUsage),
+            style = MiuixTheme.textStyles.title3,
+            color = if (summary.totalUsage == null) {
+                colors.onSurfaceSecondary
+            } else {
+                colors.onSurface
+            },
+        )
+        if (waterDetail != null) {
+            Text(
+                text = waterDetail,
+                style = MiuixTheme.textStyles.body1,
+                color = colors.primary,
+            )
+        }
+        Text(
+            text = usageCoverageText(summary),
             style = MiuixTheme.textStyles.footnote1,
             color = colors.onSurfaceSecondary,
         )
     }
 }
+
+private fun usageCoverageText(summary: HistorySummary): String =
+    if (summary.usageCoverage == summary.waterCoverage) {
+        "可解析 ${summary.usageCoverage}/${summary.visibleCount} 笔"
+    } else {
+        "纯数字 ${summary.usageCoverage}/${summary.visibleCount} 笔 · " +
+            "水量 ${summary.waterCoverage}/${summary.visibleCount} 笔"
+    }
+
+private fun averageCoverageText(summary: HistorySummary): String =
+    if (summary.averageCoverage == summary.waterAverageCoverage) {
+        "同口径 ${summary.averageCoverage}/${summary.visibleCount} 笔"
+    } else {
+        "用量口径 ${summary.averageCoverage}/${summary.visibleCount} 笔 · " +
+            "水量口径 ${summary.waterAverageCoverage}/${summary.visibleCount} 笔"
+    }
 
 @Composable
 private fun SummaryMetric(

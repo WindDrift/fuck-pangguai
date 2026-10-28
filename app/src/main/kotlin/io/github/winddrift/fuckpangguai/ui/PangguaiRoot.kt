@@ -134,6 +134,8 @@ fun PangguaiRoot(
         .collectAsStateWithLifecycle(initialValue = ThemeSettings())
     val skipDeviceInfo by settingsStore.skipDeviceInfo
         .collectAsStateWithLifecycle(initialValue = false)
+    val waterConversion by settingsStore.waterConversion
+        .collectAsStateWithLifecycle(initialValue = null)
     // DataStore 首次读取是异步的；在拿到持久化值前按“不自动打开相机”处理，避免冷启动先拉起相机。
     val autoStartCamera by settingsStore.autoStartCamera
         .collectAsStateWithLifecycle(initialValue = false)
@@ -629,6 +631,7 @@ fun PangguaiRoot(
                         RootDestination.History -> HistoryScreen(
                             controller = historyController,
                             accountId = activeAccount?.localId,
+                            waterConversion = waterConversion,
                             scrollBehavior = historyScrollBehavior,
                             bottomContentPadding = floatingNavClearance,
                         )
