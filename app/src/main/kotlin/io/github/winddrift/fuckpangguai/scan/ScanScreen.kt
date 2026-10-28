@@ -187,8 +187,8 @@ fun ScanScreen(
     LaunchedEffect(state, skipDeviceInfo) {
         val ready = state as? ScanState.DeviceReady ?: return@LaunchedEffect
         if (!skipDeviceInfo) return@LaunchedEffect
-        // 先清空扫码状态，避免从确认页返回时再次自动跳转。
-        controller.reset()
+        // 先清空扫码状态，避免从确认页返回时再次自动跳转；trace 交给确认页继续。
+        controller.reset(keepTrace = true)
         onDeviceReady(ready.device)
     }
 
@@ -197,13 +197,19 @@ fun ScanScreen(
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val value = runCatching {
+            val result = runCatching {
                 withContext(Dispatchers.IO) { QrImageDecoder.decode(context, uri) }
             }.getOrNull()
-            if (value.isNullOrBlank()) {
+            if (result == null || result.text.isBlank()) {
                 snackbar.show("相册图片里没有识别到二维码", isError = true)
             } else {
-                controller.onQr(value)
+                controller.onQr(
+                    ScanInput(
+                        raw = result.text,
+                        source = ScanSource.Gallery,
+                        decodeMs = result.decodeMs,
+                    ),
+                )
             }
         }
     }
@@ -214,7 +220,7 @@ fun ScanScreen(
 
     fun submitManualInput() {
         if (manualText.isBlank()) return
-        controller.onQr(manualText)
+        controller.onQr(ScanInput(manualText, ScanSource.Manual))
         manualInput = false
         manualText = ""
     }
@@ -227,8 +233,8 @@ fun ScanScreen(
         if (cameraState != null) {
             QrCameraPreview(
                 cameraState = cameraState,
-                onQr = { raw ->
-                    if (state.acceptsCameraScan()) controller.onQr(raw)
+                onQr = { input ->
+                    if (state.acceptsCameraScan()) controller.onQr(input)
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -640,7 +646,11 @@ private fun ResolvingOverlay(
             ) {
                 AnimatedCheckMark()
                 Text(
-                    text = if (source == ScanSource.Qr) "扫码成功" else "已读取标签",
+                    text = when (source) {
+                        ScanSource.Nfc -> "已读取标签"
+                        ScanSource.Manual -> "已输入"
+                        else -> "扫码成功"
+                    },
                     style = MiuixTheme.textStyles.title3,
                 )
                 Row(
@@ -652,10 +662,10 @@ private fun ResolvingOverlay(
                         color = colors.primary,
                     )
                     Text(
-                        text = if (source == ScanSource.Qr) {
-                            "正在获取设备信息…"
-                        } else {
+                        text = if (source == ScanSource.Nfc) {
                             "正在解析设备…"
+                        } else {
+                            "正在获取设备信息…"
                         },
                         style = MiuixTheme.textStyles.body2,
                         color = colors.onSurfaceSecondary,

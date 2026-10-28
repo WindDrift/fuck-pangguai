@@ -133,6 +133,7 @@ class AppGraph(context: Context) {
         api = api,
         planCache = planCacheStore,
         accountIdProvider = accountStore::activeLocalId,
+        diagnostics = diagnostics,
     )
     val accountRepository = AccountRepository(
         api = api,
@@ -222,6 +223,7 @@ class AppGraph(context: Context) {
         scope = scope,
         deviceRepository = deviceRepository,
         nfcTagStore = nfcTagStore,
+        diagnostics = diagnostics,
     )
 
     val locationProvider = LocationProvider(appContext)

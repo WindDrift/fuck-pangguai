@@ -18,7 +18,12 @@ data class NfcTagBinding(
     val updatedAt: Long,
 )
 
-class NfcTagStore(private val context: Context) {
+interface NfcTagSource {
+    suspend fun find(tagId: String): NfcTagBinding?
+    suspend fun bind(binding: NfcTagBinding)
+}
+
+class NfcTagStore(private val context: Context) : NfcTagSource {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -30,10 +35,10 @@ class NfcTagStore(private val context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    suspend fun find(tagId: String): NfcTagBinding? =
+    override suspend fun find(tagId: String): NfcTagBinding? =
         load().firstOrNull { it.tagId == tagId }
 
-    suspend fun bind(binding: NfcTagBinding) {
+    override suspend fun bind(binding: NfcTagBinding) {
         val existing = load().filterNot { it.tagId == binding.tagId }
         val encoded = json.encodeToString(
             ListSerializer(NfcTagBinding.serializer()),
