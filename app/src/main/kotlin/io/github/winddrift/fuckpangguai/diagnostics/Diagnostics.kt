@@ -42,6 +42,7 @@ class Diagnostics(
     private val buildType: String,
     private val scope: CoroutineScope,
     private val previewLimit: Int = 4 * 1024,
+    private val recordDebug: Boolean = true,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : DiagSink {
 
@@ -110,6 +111,7 @@ class Diagnostics(
         fields: Map<String, String>,
     ) {
         if (!settings.value.enabled) return
+        if (level == DiagLevel.Debug && !recordDebug) return
         val at = clock()
         writer.submitEvent(
             DiagEvent(

@@ -123,6 +123,7 @@ class ConfirmController(
     private var traceId = ""
     private var unlockSucceeded = false
     private var abandonPending = false
+    private var abandoned = false
 
     fun start(device: ResolvedDevice) {
         val gen = ++generation
@@ -249,6 +250,7 @@ class ConfirmController(
         traceId = nextTraceId
         unlockSucceeded = false
         abandonPending = false
+        abandoned = false
         val startedAt = clock()
         diagnostics.startTrace(
             WaterTrace(
@@ -286,6 +288,7 @@ class ConfirmController(
             endedAt = endedAt,
             error = reason,
         )
+        abandoned = true
         diagnostics.event(
             DiagLevel.Debug,
             DiagFlow.Confirm,
@@ -369,6 +372,7 @@ class ConfirmController(
     }
 
     fun unlock() {
+        if (abandoned) return
         val ready = (_state.value as? ConfirmState.Ready)?.value ?: return
         val payType = WaterDefaults.payTypeFor(ready.channel)
         if (ready.dryRun) {
@@ -712,6 +716,7 @@ class ConfirmController(
             confirmed = confirmed != null,
         )
         _state.value = ConfirmState.Ready(ready)
+        if (abandoned) return true
         val readyAt = clock()
         diagnostics.stageFinished(
             traceId = traceId,
@@ -780,6 +785,7 @@ class ConfirmController(
     }
 
     private fun maybeAutoUnlock(device: ResolvedDevice, gen: Int) {
+        if (abandoned) return
         if (gen != generation || autoUnlockTriggered) return
         val ready = (_state.value as? ConfirmState.Ready)?.value ?: return
         if (ready.device != device) return

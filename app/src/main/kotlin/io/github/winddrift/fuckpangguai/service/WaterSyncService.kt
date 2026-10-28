@@ -288,6 +288,8 @@ class WaterSyncService : Service() {
                         return
                     }
                 }
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
             } catch (throwable: Throwable) {
                 session = session.copy(
                     error = throwable.userMessage(),

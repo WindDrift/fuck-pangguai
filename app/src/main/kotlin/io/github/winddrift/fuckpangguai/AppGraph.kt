@@ -70,6 +70,7 @@ class AppGraph(context: Context) {
         buildType = BuildConfig.BUILD_TYPE,
         scope = scope,
         previewLimit = if (BuildConfig.DIAGNOSTIC_LOGGING) 16 * 1024 else 4 * 1024,
+        recordDebug = BuildConfig.DIAGNOSTIC_LOGGING,
     )
 
     val diagnosticsController = io.github.winddrift.fuckpangguai.diagnostics.DiagnosticsController(

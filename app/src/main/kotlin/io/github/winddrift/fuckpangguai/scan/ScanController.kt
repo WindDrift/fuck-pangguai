@@ -134,9 +134,11 @@ class ScanController(
         val tagId = payload.tagId
         if (!tagId.isNullOrBlank()) {
             _state.value = ScanState.Resolving(ScanSource.Nfc)
+            val expectedGeneration = generation
             scope.launch {
                 try {
                     val binding = nfcTagStore.find(tagId)
+                    if (generation != expectedGeneration) return@launch
                     if (binding == null) {
                         pendingTagId = tagId
                         _state.value = ScanState.NeedsBind(tagId, payload)
