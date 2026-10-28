@@ -78,7 +78,7 @@ class Diagnostics(
         }
     }
 
-    fun start(activeTraceProvider: () -> String?) {
+    fun start(activeTraceProvider: suspend () -> String?) {
         scope.launch(Dispatchers.IO) {
             runCatching {
                 val now = clock()

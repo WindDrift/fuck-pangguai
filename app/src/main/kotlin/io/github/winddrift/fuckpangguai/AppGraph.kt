@@ -198,6 +198,7 @@ class AppGraph(context: Context) {
         store = waterSessionStore,
         waterRepository = waterRepository,
         accountStore = accountStore,
+        diagnostics = diagnostics,
     )
 
     init {
@@ -207,7 +208,7 @@ class AppGraph(context: Context) {
             traceProvider = { diagnostics.currentTrace() },
             onCrash = diagnostics::recordCrashSync,
         ).install()
-        diagnostics.start { waterSessionStore.session.value?.traceId }
+        diagnostics.start { waterSessionStore.load()?.traceId }
     }
 
     val controller = AppController(
