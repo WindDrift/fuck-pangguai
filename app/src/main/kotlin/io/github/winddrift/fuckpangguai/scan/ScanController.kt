@@ -108,6 +108,7 @@ class ScanController(
                     message = "无法识别该二维码",
                     fields = mapOf("source" to input.source.label),
                 )
+                abandonCurrentTrace("无法识别的新输入", evenIfHandedOff = true)
                 _state.value = ScanState.Message("无法识别该二维码，请对准设备上的二维码")
             }
         }

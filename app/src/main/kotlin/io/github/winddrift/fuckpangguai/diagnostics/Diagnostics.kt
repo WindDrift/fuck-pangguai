@@ -12,8 +12,10 @@ import io.github.winddrift.fuckpangguai.diagnostics.model.TraceStage
 import io.github.winddrift.fuckpangguai.diagnostics.model.WaterTrace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,12 +62,18 @@ class Diagnostics(
     val events: StateFlow<List<DiagEvent>> = writer.events
     val traces: StateFlow<List<WaterTrace>> = writer.traces
 
+    private val _recentCrashes = MutableStateFlow<List<CrashEntry>>(emptyList())
+    val recentCrashes: StateFlow<List<CrashEntry>> = _recentCrashes.asStateFlow()
+
     private val lock = Any()
     private val activeTraces = LinkedHashMap<String, WaterTrace>()
     private var lastTraceId: String? = null
     private val sequence = AtomicInteger(0)
 
     init {
+        scope.launch(Dispatchers.IO) {
+            runCatching { _recentCrashes.value = store.readCrashes(MAX_CRASHES) }
+        }
         scope.launch {
             settings.collect { current ->
                 withContext(Dispatchers.IO) {
@@ -274,6 +282,7 @@ class Diagnostics(
             ),
         )
         writer.submitCrashSync(entry, event)
+        _recentCrashes.value = (listOf(entry) + _recentCrashes.value).take(MAX_CRASHES)
     }
 
     fun flushAsync() {
@@ -285,6 +294,7 @@ class Diagnostics(
             activeTraces.clear()
             lastTraceId = null
         }
+        _recentCrashes.value = emptyList()
         writer.clear()
     }
 
@@ -388,6 +398,7 @@ class Diagnostics(
         const val PREVIEW_KEY = "preview"
         const val STALE_TRACE_MS = 10 * 60_000L
         const val RECOVERY_TRACE_LIMIT = 500
+        const val MAX_CRASHES = 20
         const val BYTES_PER_MB = 1024L * 1024L
     }
 }

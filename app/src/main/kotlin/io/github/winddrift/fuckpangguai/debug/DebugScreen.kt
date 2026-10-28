@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.BuildConfig
 import io.github.winddrift.fuckpangguai.diagnostics.DiagnosticsController
+import io.github.winddrift.fuckpangguai.diagnostics.model.CrashEntry
 import io.github.winddrift.fuckpangguai.diagnostics.model.DiagEvent
 import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
 import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
@@ -118,6 +119,7 @@ fun DebugScreen(
     val settings by diagnostics.settings.collectAsStateWithLifecycle()
     val events by diagnostics.events.collectAsStateWithLifecycle()
     val traces by diagnostics.traces.collectAsStateWithLifecycle()
+    val crashes by diagnostics.recentCrashes.collectAsStateWithLifecycle()
     val eventFilter by diagnosticsController.eventFilter.collectAsStateWithLifecycle()
     val traceFilter by diagnosticsController.traceFilter.collectAsStateWithLifecycle()
     val storageStats by diagnosticsController.storageStats.collectAsStateWithLifecycle()
@@ -215,8 +217,8 @@ fun DebugScreen(
             DebugTab.Overview -> OverviewTab(
                 settingsEnabled = settings.enabled,
                 stats = storageStats,
-                events = events,
                 traces = traces,
+                crashes = crashes,
                 scanState = scanState,
                 dryRun = dryRun,
                 exporting = exporting,
@@ -307,8 +309,8 @@ fun DebugScreen(
 private fun OverviewTab(
     settingsEnabled: Boolean,
     stats: io.github.winddrift.fuckpangguai.diagnostics.DiagStorageStats?,
-    events: List<DiagEvent>,
     traces: List<WaterTrace>,
+    crashes: List<CrashEntry>,
     scanState: ScanState,
     dryRun: Boolean,
     exporting: Boolean,
@@ -323,7 +325,6 @@ private fun OverviewTab(
     val snackbar = LocalSnackbar.current
     val requestEntries by RequestLog.entries.collectAsStateWithLifecycle()
     val requestCleared = { snackbar.show("请求日志已清空") }
-    val latestCrash = events.firstOrNull { it.flow == DiagFlow.Crash }
     val currentTrace = traces.firstOrNull { it.outcome == TraceOutcome.Running }
 
     LazyColumn(
@@ -370,13 +371,49 @@ private fun OverviewTab(
                     enabled = !exporting,
                     onClick = { onExport(ExportMode.Save) },
                 )
-                if (latestCrash != null) {
-                    PreferenceDivider()
-                    BasicComponent(
-                        title = "最近崩溃",
-                        summary = "${formatDiagTime(latestCrash.at)} · ${latestCrash.message}",
-                        onClick = onOpenTraces,
-                    )
+            }
+        }
+
+        if (crashes.isNotEmpty()) {
+            item {
+                PreferenceGroup(title = "崩溃记录") {
+                    crashes.take(3).forEachIndexed { index, crash ->
+                        if (index > 0) PreferenceDivider()
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = "${formatTraceTime(crash.at)} · ${crash.threadName}",
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                            )
+                            Text(
+                                text = crash.exception,
+                                style = MiuixTheme.textStyles.body2,
+                                color = MiuixTheme.colorScheme.error,
+                            )
+                            Text(
+                                text = crash.stack.take(1200),
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    text = "复制崩溃 JSON",
+                                    onClick = {
+                                        copyToClipboard(
+                                            "崩溃 JSON",
+                                            diagJson.encodeToString(CrashEntry.serializer(), crash),
+                                        )
+                                    },
+                                )
+                                if (crash.traceId.isNotBlank()) {
+                                    TextButton(text = "查看接水", onClick = onOpenTraces)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -857,6 +894,7 @@ private fun TracesTab(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .imePadding()
                 .padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

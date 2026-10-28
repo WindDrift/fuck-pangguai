@@ -37,6 +37,7 @@ class AppController(
     private val sessionExpiryNotifier: SessionExpiryNotifier,
     private val sessionPhaseProvider: () -> String?,
     private val diagnostics: DiagSink = NoopDiagSink,
+    private val clearDiagnostics: suspend () -> Unit = {},
 ) {
     private val _state = MutableStateFlow<AppState>(AppState.Loading)
     val state = _state.asStateFlow()
@@ -195,6 +196,7 @@ class AppController(
                 "account_delete",
                 fields = mapOf("localId" to localId, "wasActive" to wasActive.toString()),
             )
+            clearDiagnostics()
             val active = accountRepository.hasActiveSession()
             val next = accountRepository.activeAccount.value
             val message = when {

@@ -229,6 +229,7 @@ class AppGraph(context: Context) {
         sessionExpiryNotifier = sessionExpiryNotifier,
         sessionPhaseProvider = { waterSessionStore.session.value?.phase },
         diagnostics = diagnostics,
+        clearDiagnostics = { diagnostics.clear() },
     )
 
     val scanController = ScanController(

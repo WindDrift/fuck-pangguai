@@ -8,12 +8,12 @@
 -keepclasseswithmembers class kotlinx.serialization.json.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
--keep,includedescriptorclasses class io.github.winddrift.pangguai.**$$serializer { *; }
--keepclassmembers class io.github.winddrift.pangguai.** { *** Companion; }
--keepclasseswithmembers class io.github.winddrift.pangguai.** {
+-keep,includedescriptorclasses class io.github.winddrift.fuckpangguai.**$$serializer { *; }
+-keepclassmembers class io.github.winddrift.fuckpangguai.** { *** Companion; }
+-keepclasseswithmembers class io.github.winddrift.fuckpangguai.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
--keep class io.github.winddrift.pangguai.net.dto.** { *; }
+-keep class io.github.winddrift.fuckpangguai.net.dto.** { *; }
 
 # Retrofit
 -keep,allowobfuscation,allowshrinking interface retrofit2.Call
