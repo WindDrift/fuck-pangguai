@@ -4,14 +4,14 @@
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-12%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/12)
-[![Version](https://img.shields.io/badge/version-1.9.1-blue.svg)](https://github.com/WindDrift/fuck-pangguai/releases)
+[![Version](https://img.shields.io/badge/version-1.13.0-blue.svg)](https://github.com/WindDrift/fuck-pangguai/releases)
 
 > [!WARNING]
 > 本项目与胖乖生活、学校及设备运营方均无关联。它直接调用官方接口完成扫码、解锁和支付状态查询，不绕过定位、实名或风控校验，使用风险由使用者承担。
 >
 > 仓库不提供官方客户端凭据。未配置凭据时应用可以编译，但登录和扫码等联网功能不可用。
 
-当前 1.11.0：新增独立关于页（版本、开发者、更新检查、REA 特别致谢、开源许可与隐私）、扫码页时段问候与「新版本可用」提示，并把 NFC 标签管理迁到设置。此前版本已包含通用小票充值、历史筛选统计与扫码提速改进。核心扫码、解锁、接水与结算链路仍需按测试清单在真机回归，BLE、自动扣款与充值真实扣款仍有明确限制。
+当前 1.13.0：新增自定义水量换算，可按“用量 → mL”配置并在历史、接水页与通知中并列显示水量与杯数；修改比例后历史即时重算。此前版本已包含通用小票充值、历史筛选统计、独立关于页与扫码提速改进。核心扫码、解锁、接水与结算链路仍需按测试清单在真机回归，BLE、自动扣款与充值真实扣款仍有明确限制。
 
 ## 功能
 
