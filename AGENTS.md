@@ -8,6 +8,7 @@
 - 单模块 `:app`，包名 `io.github.winddrift.fuckpangguai`。
 - `minSdk 31`，`compileSdk` / `targetSdk 37`，JDK 21。
 - 网络使用 OkHttp + Retrofit，存储使用 DataStore 与 SQLite，扫码使用 CameraX + ZXing。
+- 除 `debug`/`release` 外还有由 `release` 派生的 `diagnostic` 构建类型：同包名、同 versionCode、正式签名，`versionNameSuffix=-diagnostic`，用于记录 Debug 级诊断日志并由 CI 与正式包一起发布。
 
 公开文档不得包含接口地址、请求头、签名算法、官方反编译代码或真实凭据。
 
@@ -17,12 +18,15 @@
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:lintDebug
 ./gradlew :app:assembleDebug
+./gradlew :app:assembleDiagnostic
 ```
 
 - 本地凭据放在 `secrets.properties`（参考 `secrets.properties.example`），CI 使用 `QIEKJ_*` 环境变量。
 - 签名配置放在 `keystore.properties`（参考 `keystore.properties.example`）。
 - 不得提交 `secrets.properties`、keystore、token 或任何真实凭据。
 - 改动涉及相机、NFC、定位、前台服务或支付时，说明哪些部分只做了 JVM 测试、哪些需要真机验证。
+- `diagnostic` 变体依赖 `src/diagnostic` 提供 `DebugTokenImportSection` no-op stub；不要给 diagnostic 设置 `applicationIdSuffix`，否则无法覆盖安装正式版。
+- 诊断日志与导出涉及隐私：新增事件或响应预览字段时必须同步脱敏规则与 `docs/privacy.md`。
 
 ## 提交规范
 

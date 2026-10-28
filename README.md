@@ -4,14 +4,14 @@
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-12%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/12)
-[![Version](https://img.shields.io/badge/version-1.13.0-blue.svg)](https://github.com/WindDrift/fuck-pangguai/releases)
+[![Version](https://img.shields.io/badge/version-1.14.0-blue.svg)](https://github.com/WindDrift/fuck-pangguai/releases)
 
 > [!WARNING]
 > 本项目与胖乖生活、学校及设备运营方均无关联。它直接调用官方接口完成扫码、解锁和支付状态查询，不绕过定位、实名或风控校验，使用风险由使用者承担。
 >
 > 仓库不提供官方客户端凭据。未配置凭据时应用可以编译，但登录和扫码等联网功能不可用。
 
-当前 1.13.0：新增自定义水量换算，可按“用量 → mL”配置并在历史、接水页与通知中并列显示水量与杯数；修改比例后历史即时重算。此前版本已包含通用小票充值、历史筛选统计、独立关于页与扫码提速改进。核心扫码、解锁、接水与结算链路仍需按测试清单在真机回归，BLE、自动扣款与充值真实扣款仍有明确限制。
+当前 1.14.0：新增持久化诊断日志与接水全链路耗时，诊断页可按事件/接水/设置筛选、查看 7 段耗时与崩溃堆栈，并导出 TXT+JSON 单 ZIP；新增由正式包派生的诊断构建，与正式版同包名、同签名、同 versionCode，可覆盖安装。此前版本已包含自定义水量换算、通用小票充值、历史筛选统计与扫码提速改进。核心扫码、解锁、接水与结算链路仍需按测试清单在真机回归，BLE、自动扣款与充值真实扣款仍有明确限制。
 
 ## 功能
 
@@ -84,7 +84,7 @@ cp secrets.properties.example secrets.properties
 | [积分与自动积分](docs/points.md) | 积分页、签到、自动运行规则、任务跳过原因与账号风险边界 |
 | [构建指南](docs/build.md) | 环境、凭据配置、构建、测试与排错 |
 | [发布指南](docs/release.md) | 签名、CI Secret、版本与发布流程 |
-| [调试指南](docs/debug.md) | 演练模式、隐藏诊断页与请求日志 |
+| [调试指南](docs/debug.md) | 演练模式、诊断日志、7 段耗时与诊断包 |
 | [架构说明](docs/architecture.md) | 技术栈、模块职责、数据流与存储 |
 | [测试与验收](docs/testing.md) | 单元测试、多账号/资产真机验收清单与回归范围 |
 | [常见问题](docs/faq.md) | 构建、登录、多账号、资产、设备、支付与数据问题 |

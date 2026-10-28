@@ -70,10 +70,21 @@
 工作流会：
 
 1. 校验并解码签名与 API 凭据。
-2. 构建签名 Release APK。
-3. 使用 `apksigner` 校验签名。
-4. 将 APK 命名为 `fuck-pangguai-<versionName>.apk`，上传同名（去掉 `.apk`）的 artifact，内含 APK 与 `mapping.txt`。
-5. 标签触发时创建 GitHub Release 并用自动生成的正文；手动触发只上传 artifact。
+2. 一次构建签名 Release 与 diagnostic APK。
+3. 使用 `apksigner` 校验两个 APK，并比较证书 SHA-256。
+4. 使用 `aapt2` 校验两者同包名、同 versionCode，且 diagnostic 的 versionName 为 `<versionName>-diagnostic`。
+5. 将 APK 命名为 `fuck-pangguai-<versionName>.apk` 与 `fuck-pangguai-<versionName>-diagnostic.apk`，上传同名（去掉 `.apk`）的 artifact，内含双 APK、`mapping.txt` 与 `mapping-diagnostic.txt`。
+6. 标签触发时创建 GitHub Release 并用自动生成的正文，正文末尾追加“诊断包”说明；手动触发只上传 artifact。
+
+### 诊断包
+
+- 与正式版同包名、同 versionCode、同正式签名，可覆盖安装正式版，也可回退正式版；应用数据保留。
+- 覆盖安装会结束进程，接水或支付进行中禁止安装。
+- `versionName` 带 `-diagnostic`，应用名带“（诊断）”；记录 Debug 级事件与更大的响应预览。
+- 诊断包未通过签名/包名校验时，工作流会失败，不会发布未验签产物。
+- 诊断包日志可能包含设备名称、订单号与脱敏响应片段，分享前需检查；Release 正文会提示这一点。
+
+本地无 keystore 时 diagnostic 仍可编译，但不能发布，也不应安装覆盖正式版。
 
 ## 创建发布
 
@@ -103,4 +114,4 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 - 凭据会随 APK 分发并可被提取，不能视为绝对秘密；泄露后及时轮换。
 - keystore 与密码只保存在维护者的可信设备和 GitHub Secrets 中。
 - 不要在 Issue、PR、日志或截图中粘贴凭据、token、手机号或订单号。
-- Release 产物默认开启 R8；上传的 `mapping.txt` 只用于崩溃分析，不要附加敏感信息。
+- Release 与 diagnostic 产物默认开启 R8；上传的 `mapping.txt`/`mapping-diagnostic.txt` 只用于崩溃分析，不要附加敏感信息。

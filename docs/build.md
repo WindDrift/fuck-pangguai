@@ -1,6 +1,6 @@
 # 构建指南
 
-本文说明如何从源码构建 Debug 与 Release 包，以及如何配置本地 API 凭据。
+本文说明如何从源码构建 Debug、Release 与诊断（diagnostic）包，以及如何配置本地 API 凭据。
 
 ## 环境要求
 
@@ -64,21 +64,31 @@ Linux / macOS：
 
 ```bash
 ./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
+./gradlew :app:assembleDiagnostic
 ```
 
-Windows：
-
-```bat
-gradlew.bat :app:assembleDebug
-```
+Windows 使用 `gradlew.bat` 加相同任务。
 
 产物：
 
 - Debug：`app/build/outputs/apk/debug/app-debug.apk`
 - Release：`app/build/outputs/apk/release/app-release.apk`
-- 未配置签名时：`app/build/outputs/apk/release/app-release-unsigned.apk`
+- 诊断：`app/build/outputs/apk/diagnostic/app-diagnostic.apk`
+- 未配置签名时：`app/build/outputs/apk/release/app-release-unsigned.apk`（diagnostic 同理）
 
-Release 默认开启 R8 与资源压缩。缺少签名配置不会阻止构建，只会产出未签名包。
+Release 与 diagnostic 默认开启 R8 与资源压缩。缺少签名配置不会阻止构建，只会产出未签名包；CI 发布会严格要求正式签名。
+
+### 诊断构建
+
+`diagnostic` 由 `release` 派生，使用同一包名、versionCode 与正式签名，可以与正式版互相覆盖安装。区别是：
+
+- `versionName` 追加 `-diagnostic`，应用名显示“去他妈的胖乖生活（诊断）”。
+- 记录 Debug 级事件与 16 KB 响应预览；Release 只记录 Info+ 与 4 KB 预览。
+- 不开放 token 导入，演练模式默认关闭。
+- 构建脚本显式设置 `isShrinkResources = true`，因为 `initWith(release)` 不会复制该属性。
+
+接水或支付进行中不要安装诊断包：覆盖安装会结束应用进程。本地缺少 keystore 时 diagnostic 仍可编译，但产物未签名，不能用于覆盖安装正式版。
 
 ## 测试与静态检查
 
@@ -92,8 +102,10 @@ Release 默认开启 R8 与资源压缩。缺少签名配置不会阻止构建�
 常用组合：
 
 ```bash
-./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDiagnostic
 ```
+
+诊断相关 JVM 测试覆盖存储/清理、筛选、统计、导出 ZIP、崩溃记录、接水 trace 归约与扫码/确认 trace 关联；相机、NFC、定位、前台服务与真实支付仍需真机验证。
 
 ## 依赖说明
 

@@ -44,6 +44,14 @@
 | `ReleaseNotesTest` | Release Markdown 转纯文本：标题、列表、粗体、链接、图片、HTML、代码围栏与截断 |
 | `UpdateControllerTest` | 自动检查失败静默、手动失败原因、发现新版本、已是最新、进程内只检查一次与并发防重 |
 | `UpdateModelsTest` | GitHub Release JSON 解析、网络异常映射与中文错误文案 |
+| `DiagStoreTest` | NDJSON 追加/读取、坏行跳过、按天数/大小清理、trace 最新快照、崩溃读取与清空 |
+| `DiagFilterTest` | 事件搜索/级别/类别/时间/条数筛选，trace 设备/结果/时间筛选 |
+| `DiagStatsTest` | 未到达阶段计放弃且不参与平均、成功/失败/放弃/进行中、平均与最大耗时、平均尝试 |
+| `DiagExportTest` | ZIP 三入口、TXT/JSON 内容、全量/筛选统计、当前 trace 与崩溃 trace |
+| `CrashReportTest` | 崩溃堆栈、当前 trace、无 trace 与一次性投递 |
+| `WaterTraceTrackerTest` | 出水确认、结束耗时、结算成功/失败/放弃、未出水故障、完成后不再改写 |
+| `ScanControllerTraceTest` | 相册/手动解码耗时、来源、reset 放弃、旧结果不覆盖、失败标 Failed、交接不放弃、NFC 映射 |
+| `ConfirmControllerTraceTest` | 确认/解锁续接扫码 trace、阻断/权限/演练/失败、解锁中离开延迟标放弃 |
 
 运行：
 
@@ -56,10 +64,10 @@
 ## 静态检查
 
 ```bash
-./gradlew :app:lintDebug
+./gradlew :app:lintDebug :app:assembleDebug :app:assembleDiagnostic
 ```
 
-lint 通过不代表真机流程可用；涉及硬件、定位、通知和支付的改动仍需手动回归。通用小票充值已做 JVM 测试与 debug/release 构建检查，但真实扣款、支付宝拉起和包名/签名兼容性仍需真机验证。
+lint 通过不代表真机流程可用；涉及硬件、定位、通知和支付的改动仍需手动回归。通用小票充值已做 JVM 测试与 debug/release 构建检查，但真实扣款、支付宝拉起和包名/签名兼容性仍需真机验证。诊断/正式双包的签名、包名与 versionCode 由 CI 校验，本地无 keystore 时只能验证编译与未签名产物。
 
 ## 真机验收清单
 
@@ -87,6 +95,19 @@ lint 通过不代表真机流程可用；涉及硬件、定位、通知和支付
 20. 开关“悬浮底栏”，确认两种导航样式、页面切换动画和返回键行为正常。
 21. 积分页加载或运行中、资产卡刷新中，刷新/完成按钮应显示禁用态；连点不会产生重复请求。
 22. NFC 首次绑定期间按钮显示“正在绑定…”，绑定、跳过与返回互斥，不会重复写入或覆盖新的扫码结果。
+
+### 诊断日志与诊断包
+
+1. Release 默认记录：完成一次扫码/接水后重启应用，事件、trace 与统计仍在；关闭日志开关后不再新增事件，已有日志保留；重新开启后继续记录。
+2. 完整接水：核对 7 段顺序、逐阶段耗时、用水时长、结束操作耗时、结算与支付结果；总耗时包含用户操作间隔与用水时长。失败、放弃、中断分别可见；平均随筛选变化并显示参与 trace 数。
+3. 扫码失败、BLE/故障码阻断、定位失败、解锁超时、设备故障与支付未知各跑一次，确认阶段结果、错误与统计口径正确。
+4. 导出 ZIP：解压检查 `diagnostics.txt`、`diagnostics.json`、`README.txt`；确认包含保留期全部日志、当前筛选统计、TXT/JSON 一致；分享与保存各一次。
+5. 在导出物中 grep 确认没有 token、手机号、坐标、原始 SN/IMEI、请求体与请求头；非 JSON 响应应为“省略”提示而不是原文。
+6. 在 Debug/诊断构建触发“写入测试崩溃”，重启后诊断页显示堆栈与当前 trace，可复制 JSON 并随 ZIP 导出。
+7. 删除任一账号后诊断日志应清空；退出登录应保留。
+8. 诊断包：正式包覆盖安装诊断包、诊断包回退正式包，数据保留；核对版本名、应用名、R8 生效与导出正常。接水/支付中禁止安装。
+9. 修改保留天数/存储上限，确认旧日文件与最旧文件按预期清理，当天文件不被大小清理删除。
+10. CI 先 `workflow_dispatch` 检查双 APK、双 mapping、证书 SHA-256、同包名/同 versionCode 与 `-diagnostic` 版本名，再打 tag 检查 Release 资产与“诊断包”说明。
 
 ### 扫码相机与 NFC 状态
 
@@ -226,6 +247,9 @@ lint 通过不代表真机流程可用；涉及硬件、定位、通知和支付
 - NFC 标签格式与绑定策略可能因学校或设备而异。
 - 官方服务调整可能导致接口行为变化，需要重新验收。
 - 自动化测试只覆盖纯 JVM 逻辑，不包含相机、NFC、定位、前台服务和真实支付。
+- 诊断日志的 NDJSON 落盘、保留清理、崩溃同步写与 ZIP 分享/保存有 JVM 测试，但 `FileProvider`、系统分享/文件选择器、杀进程恢复、前台服务中的 trace 续写与跨版本覆盖安装必须真机验收。
+- 接水 7 段依赖真实设备状态（workStatus/amount/status）与支付轮询；JVM 只覆盖归约规则，真实时序、失败场景与“未出水”判定需真机复核。
+- 诊断包的 R8/mapping、正式签名与同 versionCode 覆盖安装由 CI 校验；本地无 keystore 时只能验证未签名构建。
 - 解锁提速中的“预绑定后点击时跳过重复 bind”和 250ms 快速轮询需要真实设备与账号验证；若服务端不接受，关闭 `PREBIND_ENABLED` 或调大轮询间隔后重新验收。
 - 定位的 `LocationManager` 回调、权限弹窗、室内定位耗时、套餐缓存 DataStore 文件与杀进程后的持久化都必须真机验收；JVM 测试只覆盖位置缓存、状态机与缓存排序逻辑。
 - DataStore、Android Keystore、SQLite 迁移与 Coil 图片加载无法在 JVM 单测中覆盖，必须真机验收。

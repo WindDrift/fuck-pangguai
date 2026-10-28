@@ -45,6 +45,7 @@
 | `about` | 关于页、OS3 流体背景（API 33+ AGSL，低版本纯色）、开发者卡片、许可/隐私弹窗与更新状态入口 |
 | `ui` | 根导航、主题、通用组件与格式化 |
 | `update` | GitHub Releases 更新检查、版本比较与 Release 正文纯文本转换 |
+| `diagnostics` | 持久化诊断事件、接水 7 段 trace、崩溃记录、筛选/统计/导出与诊断设置 |
 | `debug` | 隐藏诊断页与 Debug 专属工具 |
 
 ## 数据流
@@ -99,6 +100,7 @@ flowchart LR
 - `HistoryFilter` 是不依赖 Android 的纯筛选策略：时间窗口、设备/状态/小票/金额条件和搜索都在这一层组合。`HistorySummary` 在筛选后的可见列表上计算原价合计、纯数字用量、可换算总水量、平均单价与覆盖率；平均单价分别按用量口径和水量口径统计。`HistoryUiState.records` 始终保存完整记录，`HistoryScreen` 派生可见列表和统计卡；账单同步、重试、删除与 CSV 仍使用完整列表。
 - `WaterConversion` 是不依赖 Android 的全局换算策略：解析纯数字用量与带 L/mL 的水量，在展示时换算为 mL 和杯数。历史、接水页和通知共用同一套格式化逻辑；设置修改后不写回历史记录，而是由 UI 即时重算。未配置换算时不改变任何原有展示。
 - `WaterSessionManager` 维护当前会话，并负责启动/结束前台服务。
+- `Diagnostics` 是应用级诊断 facade：所有构建默认记录关键事件；`ScanController`、`ConfirmController`、`WaterSyncService` 与网络拦截器通过 `DiagSink` 写入同一 trace。`DiagWriter` 单协程异步落盘并维护内存列表，`DiagStore` 按天 NDJSON 存储、按天数与总字节清理，`DiagnosticsController` 提供筛选、统计、导出与设置给诊断页。
 - 会话阶段、支付结果和错误信息集中保存在 `WaterSession`，避免多个页面各自推断。
 - 支付查询有超时上限；超时后进入“支付状态未知”，不会无限轮询或自动重试扣款。
 
@@ -142,7 +144,9 @@ flowchart LR
 | NFC 标签映射 | DataStore Preferences | 标签 ID → SN、设备名、商品 ID |
 | 接水历史与账单缓存 | SQLite `pangguai_history.db` | 订单号、金额、阶段、错误、时间、`account_id`，以及账单原价/优惠/实付、店铺/设备、小票抵扣与同步时间；账单 JSON 与记录同生命周期 |
 | 调试请求日志 | 内存 | 仅 Debug，最多 100 条，退出进程即丢失；响应中的 token/手机号/姓名/证件号/头像地址会脱敏 |
-| 解锁耗时 | 内存 | 仅 Debug，最多 20 条，退出进程即丢失；只含通道与毫秒数，不含订单号、设备标识、坐标或 token |
+| 解锁耗时 | 内存 | Debug 最多 20 条；诊断日志中的解锁阶段随 trace 持久化 |
+| 诊断事件与接水 trace | `filesDir/diagnostics/{events,traces,crashes}/YYYY-MM-DD.ndjson` | 默认保留 7 天、上限 10 MB；按天写入，读取时按 traceId 取最新；日志开关关闭后停止写入，清空或删除账号时删除 |
+| 诊断导出缓存 | `cacheDir/diagnostics/exports/` | 单 ZIP（TXT+JSON+README），最多 5 个 |
 
 `allowBackup=false`，系统备份不会带走 token、历史或映射。卸载应用会删除本地数据。账号合并时历史记录会迁移到合并后的 `localId`；删除账号会删除该账号的历史与资产快照。主动退出并选择保留记录时，账号条目会清除 token 并标记为已退出，历史继续保留；重新登录同一手机号会沿用原 `localId`。CSV 导入在同一事务内按订单号去重写入当前账号，导入不完整或无效的行会跳过并计数。
 
@@ -159,8 +163,15 @@ flowchart LR
 - 历史页的账单匹配只读取订单与通用小票流水，不创建、取消或支付订单；账单缓存随历史记录按账号隔离，删除记录、清空历史或删除账号时一并删除。
 - 通用小票充值会创建官方虚拟订单、读取支付渠道并调起支付宝 SDK；客户端只透传服务端生成的支付串，不保存或打印完整 `orderInfo`，也不使用客户端密钥签名支付。支付成功以服务端订单状态为准。
 - 支付宝 SDK 为闭源 AAR，仅在用户主动充值时拉起；支付过程由支付宝 App 或 SDK H5 页面处理，本应用不采集银行卡、支付密码或支付宝账号。
-- Debug 构建才记录请求；请求与响应中的常见敏感字段都会打码，但分享前仍需人工检查。
+- 所有构建都会把网络请求的 method/path/status/耗时与脱敏响应预览写入诊断日志，不保存请求体、请求头与查询参数；完整 cURL 视图只在 Debug/诊断构建的内存中保留。
+- 诊断日志只保存在本机，不自动上传；响应中的 token/手机号/证件号/定位/SN/IMEI 等字段会脱敏，非 JSON 响应不保存原文。诊断包导出前会提示可能包含设备名称、订单号与响应片段。
 - 定位在扫码页已授权时静默预热，确认与下单流程读取风控参数；坐标仅在本机内存缓存 5 分钟，不写入磁盘、不保存位置历史。
+
+## 构建类型
+
+- `debug`：可调试、debug 签名，记录 Debug 级诊断事件与完整 cURL 视图，演练模式默认开启。
+- `release`：R8 + 资源压缩，正式签名；默认记录 Info+ 关键事件与 4 KB 响应预览。
+- `diagnostic`：由 release 派生，R8 + 资源压缩 + 正式签名 + 同包名/同 versionCode；`versionName` 加 `-diagnostic`，应用名显示“（诊断）”；记录 Debug 级事件与 16 KB 响应预览，但不开放 token 导入、演练模式默认关闭。`initWith(release)` 不会复制 `isShrinkResources`，构建脚本显式设置。
 
 ## 非目标
 
