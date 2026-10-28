@@ -35,10 +35,14 @@ class DiagWriter(
     init {
         scope.launch(Dispatchers.IO) {
             runCatching {
-                val current = limits()
-                store.cleanup(current.retentionDays, current.maxMb.toLong() * BYTES_PER_MB)
-                _events.value = store.readEvents(DiagStore.DEFAULT_EVENT_LIMIT)
-                _traces.value = store.readTraces(DiagStore.DEFAULT_TRACE_LIMIT)
+                _events.value = mergeEvents(
+                    store.readEvents(DiagStore.DEFAULT_EVENT_LIMIT),
+                    _events.value,
+                )
+                _traces.value = mergeTraces(
+                    store.readTraces(DiagStore.DEFAULT_TRACE_LIMIT),
+                    _traces.value,
+                )
             }
         }
         scope.launch(Dispatchers.IO) {
@@ -120,6 +124,23 @@ class DiagWriter(
         val current = limits()
         store.cleanup(current.retentionDays, current.maxMb.toLong() * BYTES_PER_MB)
     }
+
+    private fun mergeEvents(
+        loaded: List<DiagEvent>,
+        current: List<DiagEvent>,
+    ): List<DiagEvent> = (loaded + current)
+        .distinctBy { it.id }
+        .sortedByDescending { it.at }
+        .take(MAX_EVENTS)
+
+    private fun mergeTraces(
+        loaded: List<WaterTrace>,
+        current: List<WaterTrace>,
+    ): List<WaterTrace> = (loaded + current)
+        .groupBy { it.traceId }
+        .map { (_, traces) -> traces.maxBy { it.updatedAt } }
+        .sortedByDescending { it.startedAt }
+        .take(MAX_TRACES)
 
     private fun upsertTrace(current: List<WaterTrace>, trace: WaterTrace): List<WaterTrace> =
         (current.filterNot { it.traceId == trace.traceId } + trace)

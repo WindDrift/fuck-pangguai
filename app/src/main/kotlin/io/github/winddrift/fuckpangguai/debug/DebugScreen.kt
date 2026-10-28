@@ -232,7 +232,14 @@ fun DebugScreen(
                     scope.launch { settingsStore.setDryRun(enabled) }
                 },
                 onImportToken = onImportToken,
-                onOpenTraces = { tab = DebugTab.Traces.ordinal },
+                onOpenTrace = { traceId ->
+                    if (traceId.isNullOrBlank()) {
+                        diagnosticsController.clearTraceFilters()
+                    } else {
+                        diagnosticsController.filterByTrace(traceId)
+                    }
+                    tab = DebugTab.Traces.ordinal
+                },
                 copyToClipboard = ::copyToClipboard,
             )
 
@@ -319,7 +326,7 @@ private fun OverviewTab(
     onExport: (ExportMode) -> Unit,
     onDryRunChange: (Boolean) -> Unit,
     onImportToken: (String) -> Unit,
-    onOpenTraces: () -> Unit,
+    onOpenTrace: (String?) -> Unit,
     copyToClipboard: (String, String) -> Unit,
 ) {
     val snackbar = LocalSnackbar.current
@@ -409,7 +416,10 @@ private fun OverviewTab(
                                     },
                                 )
                                 if (crash.traceId.isNotBlank()) {
-                                    TextButton(text = "查看接水", onClick = onOpenTraces)
+                                    TextButton(
+                                        text = "查看接水",
+                                        onClick = { onOpenTrace(crash.traceId) },
+                                    )
                                 }
                             }
                         }
@@ -430,7 +440,7 @@ private fun OverviewTab(
                         title = currentTrace.deviceName.ifBlank { "饮水机" },
                         summary = "已完成 ${currentTrace.stages.count { it.reached }} / 7 段 · " +
                             "已持续 ${formatDuration(currentTrace.totalDurationMs)} · 点此查看",
-                        onClick = onOpenTraces,
+                        onClick = { onOpenTrace(currentTrace.traceId) },
                     )
                 }
             }

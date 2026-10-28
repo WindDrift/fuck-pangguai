@@ -76,7 +76,7 @@ class Diagnostics(
             runCatching { _recentCrashes.value = store.readCrashes(MAX_CRASHES) }
         }
         scope.launch {
-            settings.collect { current ->
+            settingsStore.settings.collect { current ->
                 withContext(Dispatchers.IO) {
                     store.cleanup(
                         current.retentionDays,
