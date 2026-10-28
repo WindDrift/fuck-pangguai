@@ -228,6 +228,28 @@ class ConfirmControllerTest {
         assertTrue(controller.state.value is ConfirmState.Error)
         assertNull(deps.configSource.saved)
         assertEquals(1, deps.deviceSource.clearCalls)
+
+        val timing = deps.timingSink.entries.single()
+        assertEquals(UnlockOutcome.Failed, timing.outcome)
+        assertEquals("ApiException--1", timing.errorKind)
+    }
+
+    @Test
+    fun `unlock records phase timings`() = runTest {
+        val deps = Deps()
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        controller.unlock()
+        advanceUntilIdle()
+
+        val timing = deps.timingSink.entries.single()
+        assertEquals(UnlockOutcome.Unlocked, timing.outcome)
+        assertEquals(15, timing.channelMethod)
+        assertEquals("支付宝免密", timing.channelName)
+        assertEquals(1, timing.syncPollCount)
+        assertTrue(timing.totalMs >= 0)
+        assertTrue(timing.toText().contains("成功"))
     }
 
     @Test
@@ -427,6 +449,7 @@ class ConfirmControllerTest {
         val locationSource = FakeLocationSource(locationGranted)
         val settingsSource = FakeSettingsSource(oneTap, dryRun)
         val configSource = FakeConfigSource()
+        val timingSink = FakeTimingSink()
 
         fun controller(scope: CoroutineScope) =
             ConfirmController(
@@ -436,6 +459,7 @@ class ConfirmControllerTest {
                 locationProvider = locationSource,
                 settingsStore = settingsSource,
                 configStore = configSource,
+                timingSink = timingSink,
             )
     }
 
@@ -562,6 +586,14 @@ class ConfirmControllerTest {
 
         override suspend fun save(device: ConfirmedDevice) {
             saved = device
+        }
+    }
+
+    private class FakeTimingSink : UnlockTimingSink {
+        val entries = mutableListOf<UnlockTiming>()
+
+        override fun record(entry: UnlockTiming) {
+            entries += entry
         }
     }
 }

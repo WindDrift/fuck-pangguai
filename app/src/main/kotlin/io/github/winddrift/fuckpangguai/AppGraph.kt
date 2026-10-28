@@ -32,6 +32,8 @@ import io.github.winddrift.fuckpangguai.storage.PlanCacheStore
 import io.github.winddrift.fuckpangguai.update.GithubReleaseSource
 import io.github.winddrift.fuckpangguai.update.UpdateController
 import io.github.winddrift.fuckpangguai.confirm.ConfirmController
+import io.github.winddrift.fuckpangguai.confirm.NoopUnlockTimingSink
+import io.github.winddrift.fuckpangguai.confirm.UnlockTimingLog
 import io.github.winddrift.fuckpangguai.history.BillRepository
 import io.github.winddrift.fuckpangguai.history.HistoryController
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
@@ -200,5 +202,6 @@ class AppGraph(context: Context) {
         locationProvider = locationProvider,
         settingsStore = settingsStore,
         configStore = deviceConfigStore,
+        timingSink = if (BuildConfig.DEBUG) UnlockTimingLog else NoopUnlockTimingSink,
     )
 }

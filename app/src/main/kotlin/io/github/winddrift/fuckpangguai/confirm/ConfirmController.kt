@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 import java.util.Locale
 
 data class LocationSnapshot(
@@ -90,6 +91,8 @@ class ConfirmController(
     private val locationProvider: LocationSource,
     private val settingsStore: SettingsSource,
     private val configStore: DeviceConfigSource,
+    private val timingSink: UnlockTimingSink = NoopUnlockTimingSink,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val _state = MutableStateFlow<ConfirmState>(ConfirmState.Loading)
     val state = _state.asStateFlow()
@@ -227,9 +230,17 @@ class ConfirmController(
         if (ready.locationPhase != LocationPhase.Ready || location == null) return
 
         _state.value = ConfirmState.Unlocking
+        val clickedAt = clock()
         scope.launch {
+            var bindStats = BindStats()
+            var unlockCallMs = 0L
+            var sync = SyncOutcome(ready = false, polls = 0, durationMs = 0L)
             try {
+                val bindStartedAt = clock()
                 deviceRepository.bindChannel(ready.channel.method)
+                bindStats = BindStats(callMs = clock() - bindStartedAt)
+
+                val unlockStartedAt = clock()
                 val unlock = waterRepository.unlock(
                     detail = ready.device.detail,
                     skuId = ready.sku.skuId,
@@ -237,16 +248,23 @@ class ConfirmController(
                     lng = location.lng,
                     payType = payType,
                 )
-                waitForDevice(unlock)
+                unlockCallMs = clock() - unlockStartedAt
+
+                sync = waitForDevice(unlock)
+                if (!sync.ready) {
+                    throw ApiException(-1, "设备启动超时，请检查设备状态")
+                }
+
                 configStore.save(
                     ConfirmedDevice(
                         goodsId = ready.device.scan.id,
                         skuId = ready.sku.skuId,
                         channelMethod = ready.channel.method,
                         deviceName = ready.device.detail.name,
-                        updatedAt = System.currentTimeMillis(),
+                        updatedAt = clock(),
                     ),
                 )
+                val totalMs = clock() - clickedAt
                 _state.value = ConfirmState.Unlocked(
                     UnlockSession(
                         device = ready.device,
@@ -256,9 +274,31 @@ class ConfirmController(
                         location = location,
                     ),
                 )
+                reportTiming(
+                    buildTiming(
+                        outcome = UnlockOutcome.Unlocked,
+                        ready = ready,
+                        bindStats = bindStats,
+                        unlockCallMs = unlockCallMs,
+                        sync = sync,
+                        totalMs = totalMs,
+                        errorKind = null,
+                    ),
+                )
             } catch (exception: CancellationException) {
                 throw exception
             } catch (throwable: Throwable) {
+                reportTiming(
+                    buildTiming(
+                        outcome = UnlockOutcome.Failed,
+                        ready = ready,
+                        bindStats = bindStats,
+                        unlockCallMs = unlockCallMs,
+                        sync = sync,
+                        totalMs = clock() - clickedAt,
+                        errorKind = errorKind(throwable),
+                    ),
+                )
                 val message = throwable.userMessage()
                 try {
                     deviceRepository.clearCachedPlans(ready.device)
@@ -361,12 +401,15 @@ class ConfirmController(
         lng = String.format(Locale.US, "%.6f", point.longitude),
     )
 
-    private suspend fun waitForDevice(unlock: Unlock) {
+    private suspend fun waitForDevice(unlock: Unlock): SyncOutcome {
         if (unlock.msgId.isBlank()) {
             throw ApiException(-1, "解锁成功但未返回 msgId")
         }
+        val startedAt = clock()
+        var polls = 0
         val ready = withTimeoutOrNull(15_000) {
             while (true) {
+                polls += 1
                 val bean = waterRepository.msgSync(unlock.msgId)
                 if (waterRepository.isDeviceReady(bean)) return@withTimeoutOrNull true
                 delay(1_000)
@@ -374,10 +417,65 @@ class ConfirmController(
             @Suppress("UNREACHABLE_CODE")
             false
         } ?: false
-        if (!ready) {
-            throw ApiException(-1, "设备启动超时，请检查设备状态")
+        return SyncOutcome(
+            ready = ready,
+            polls = polls,
+            durationMs = (clock() - startedAt).coerceAtLeast(0L),
+        )
+    }
+
+    private fun buildTiming(
+        outcome: UnlockOutcome,
+        ready: ConfirmReady,
+        bindStats: BindStats,
+        unlockCallMs: Long,
+        sync: SyncOutcome,
+        totalMs: Long,
+        errorKind: String?,
+    ): UnlockTiming = UnlockTiming(
+        atMillis = clock(),
+        outcome = outcome,
+        channelMethod = ready.channel.method,
+        channelName = ready.channel.methodName,
+        prebindAttempted = false,
+        prebound = bindStats.prebound,
+        bindSkipped = bindStats.skipped,
+        bindWaitMs = bindStats.waitMs,
+        bindCallMs = bindStats.callMs,
+        unlockCallMs = unlockCallMs.coerceAtLeast(0L),
+        syncPollCount = sync.polls,
+        syncDurationMs = sync.durationMs,
+        totalMs = totalMs.coerceAtLeast(0L),
+        errorKind = errorKind,
+    )
+
+    private fun reportTiming(entry: UnlockTiming) {
+        try {
+            timingSink.record(entry)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Throwable) {
         }
     }
+
+    private fun errorKind(throwable: Throwable): String = when (throwable) {
+        is ApiException -> "ApiException-${throwable.code}"
+        is IOException -> "IOException"
+        else -> throwable.javaClass.simpleName
+    }
+
+    private data class BindStats(
+        val skipped: Boolean = false,
+        val prebound: Boolean = false,
+        val waitMs: Long = 0L,
+        val callMs: Long = 0L,
+    )
+
+    private data class SyncOutcome(
+        val ready: Boolean,
+        val polls: Int,
+        val durationMs: Long,
+    )
 
     private fun deviceErrorMessage(code: String, serverMessage: String?): String = when (code) {
         "2" -> "设备工作中，请更换设备使用"

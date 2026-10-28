@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.BuildConfig
+import io.github.winddrift.fuckpangguai.confirm.UnlockTimingLog
 import io.github.winddrift.fuckpangguai.net.RequestLog
 import io.github.winddrift.fuckpangguai.net.dto.GoodsDetail
 import io.github.winddrift.fuckpangguai.scan.ScanController
@@ -53,6 +54,7 @@ fun DebugScreen(
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
     val entries by RequestLog.entries.collectAsStateWithLifecycle()
+    val unlockEntries by UnlockTimingLog.entries.collectAsStateWithLifecycle()
     val scanState by scanController.state.collectAsStateWithLifecycle()
     var dryRun by remember { mutableStateOf(true) }
 
@@ -217,6 +219,57 @@ fun DebugScreen(
                             snackbar.show("请求日志已清空")
                         },
                     )
+                }
+            }
+        }
+
+        if (BuildConfig.DEBUG) {
+            item {
+                PreferenceGroup(title = "最近解锁") {
+                    if (unlockEntries.isEmpty()) {
+                        BasicComponent(
+                            title = "暂无解锁记录",
+                            summary = "完成一次真实解锁后，这里显示点击到设备就绪的分段耗时；不含订单号、坐标或 token。",
+                        )
+                    } else {
+                        unlockEntries.take(5).forEachIndexed { index, entry ->
+                            if (index > 0) PreferenceDivider()
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
+                                Text(
+                                    text = entry.toText(),
+                                    style = MiuixTheme.textStyles.body2,
+                                )
+                            }
+                        }
+                        PreferenceDivider()
+                        BasicComponent(
+                            title = "复制解锁耗时",
+                            endActions = {
+                                Icon(
+                                    imageVector = MiuixIcons.Copy,
+                                    contentDescription = null,
+                                    tint = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                )
+                            },
+                            onClick = {
+                                copyToClipboard(
+                                    "解锁耗时",
+                                    unlockEntries.joinToString("\n") { it.toText() },
+                                )
+                            },
+                        )
+                        PreferenceDivider()
+                        BasicComponent(
+                            title = "清空解锁记录",
+                            onClick = {
+                                UnlockTimingLog.clear()
+                                snackbar.show("解锁记录已清空")
+                            },
+                        )
+                    }
                 }
             }
         }
