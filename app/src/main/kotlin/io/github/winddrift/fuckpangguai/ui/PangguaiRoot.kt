@@ -180,6 +180,7 @@ fun PangguaiRoot(
 
     LaunchedEffect(state) {
         if (state != AppState.Ready) {
+            confirmController?.abandon("登录态变化")
             secondary = null
             tab = MainTab.Scan
             showEndSessionDialog = false
@@ -206,6 +207,7 @@ fun PangguaiRoot(
 
     LaunchedEffect(Unit) {
         controller.accountChanged.collect {
+            confirmController?.abandon("账号切换")
             scanController.reset()
         }
     }
@@ -278,6 +280,11 @@ fun PangguaiRoot(
 
             is SecondaryPage.AccountAccess -> {
                 controller.cancelAuth()
+                secondary = null
+            }
+
+            is SecondaryPage.Confirm -> {
+                confirmController?.abandon("离开确认页")
                 secondary = null
             }
 
@@ -487,7 +494,7 @@ fun PangguaiRoot(
                             state = confirmState,
                             onUnlock = { confirmController?.unlock() },
                             onRetryLocation = { confirmController?.retryLocation() },
-                            onBack = { secondary = null },
+                            onBack = { closeSecondary() },
                         )
                         is RootBottomBar.Navigation -> {
                             if (!bar.floating) {
@@ -604,7 +611,7 @@ fun PangguaiRoot(
                             onSelectSku = { confirmController?.selectSku(it) },
                             onSelectChannel = { confirmController?.selectChannel(it) },
                             onRetryLocation = { confirmController?.retryLocation() },
-                            onBack = { secondary = null },
+                            onBack = { closeSecondary() },
                         )
 
                         RootDestination.Debug -> DebugScreen(

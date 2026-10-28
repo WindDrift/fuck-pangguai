@@ -4,6 +4,14 @@ import io.github.winddrift.fuckpangguai.core.AppConfig
 import io.github.winddrift.fuckpangguai.device.ChannelSelector
 import io.github.winddrift.fuckpangguai.device.DeviceDataSource
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
+import io.github.winddrift.fuckpangguai.diagnostics.DiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.NoopDiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
+import io.github.winddrift.fuckpangguai.diagnostics.model.StageOutcome
+import io.github.winddrift.fuckpangguai.diagnostics.model.TraceOutcome
+import io.github.winddrift.fuckpangguai.diagnostics.model.TraceStage
+import io.github.winddrift.fuckpangguai.diagnostics.model.WaterTrace
 import io.github.winddrift.fuckpangguai.location.GeoPoint
 import io.github.winddrift.fuckpangguai.location.LocationSource
 import io.github.winddrift.fuckpangguai.net.ApiException
@@ -73,6 +81,7 @@ data class UnlockSession(
     val channel: PayChannelRoute,
     val unlock: Unlock,
     val location: LocationSnapshot,
+    val traceId: String = "",
 )
 
 sealed interface ConfirmState {
@@ -94,6 +103,7 @@ class ConfirmController(
     private val settingsStore: SettingsSource,
     private val configStore: DeviceConfigSource,
     private val timingSink: UnlockTimingSink = NoopUnlockTimingSink,
+    private val diagnostics: DiagSink = NoopDiagSink,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val _state = MutableStateFlow<ConfirmState>(ConfirmState.Loading)
@@ -110,6 +120,9 @@ class ConfirmController(
     private var boundChannel: Int? = null
     private var boundByPrebind = false
     private var prebindAttempted = false
+    private var traceId = ""
+    private var unlockSucceeded = false
+    private var abandonPending = false
 
     fun start(device: ResolvedDevice) {
         val gen = ++generation
@@ -122,27 +135,33 @@ class ConfirmController(
         locationPhase = LocationPhase.Fetching
         loadJob?.cancel()
         locationJob?.cancel()
+        prepareTrace(device)
 
         loadJob = scope.launch {
             _state.value = ConfirmState.Loading
             try {
                 val detail = device.detail
                 if (detail.categoryCode != AppConfig.WATER_CATEGORY) {
-                    _state.value = ConfirmState.Blocked("这不是饮水机")
+                    blockConfirm("这不是饮水机")
                     return@launch
                 }
                 if (detail.isBluetooth == 1) {
-                    _state.value = ConfirmState.Blocked(
-                        "该设备支持 BLE 解锁；当前版本只做探测，暂不支持解锁。",
-                    )
+                    blockConfirm("该设备支持 BLE 解锁；当前版本只做探测，暂不支持解锁。")
                     return@launch
                 }
                 detail.deviceErrorCode?.takeIf { it.isNotBlank() }?.let { code ->
-                    _state.value = ConfirmState.Blocked(deviceErrorMessage(code, detail.deviceErrorMsg))
+                    blockConfirm(deviceErrorMessage(code, detail.deviceErrorMsg))
                     return@launch
                 }
 
                 if (!locationProvider.hasPermission()) {
+                    diagnostics.event(
+                        DiagLevel.Info,
+                        DiagFlow.Confirm,
+                        "location_permission_required",
+                        traceId = traceId,
+                        fields = mapOf("goodsId" to device.scan.id),
+                    )
                     _state.value = ConfirmState.NeedsLocationPermission
                     return@launch
                 }
@@ -152,7 +171,9 @@ class ConfirmController(
                 val cached = deviceRepository.readCachedPlans(device)
                 if (gen != generation) return@launch
                 if (cached != null) {
-                    if (!publishReady(device, cached.skus, cached.channels, gen)) return@launch
+                    if (!publishReady(device, cached.skus, cached.channels, gen, fromCache = true)) {
+                        return@launch
+                    }
                     launchCacheRefresh(device)
                     return@launch
                 }
@@ -160,38 +181,169 @@ class ConfirmController(
                 val plans = deviceRepository.loadPlans(device)
                 if (gen != generation) return@launch
                 if (plans.skus.isEmpty()) {
-                    _state.value = ConfirmState.Blocked("该设备没有可用套餐")
+                    blockConfirm("该设备没有可用套餐")
                     return@launch
                 }
                 if (plans.channels.isEmpty()) {
-                    _state.value = ConfirmState.Blocked("该设备没有可用支付方式")
+                    blockConfirm("该设备没有可用支付方式")
                     return@launch
                 }
-                publishReady(device, plans.skus, plans.channels, gen)
+                publishReady(device, plans.skus, plans.channels, gen, fromCache = false)
             } catch (exception: CancellationException) {
                 throw exception
             } catch (throwable: Throwable) {
                 if (gen == generation) {
+                    diagnostics.stageFinished(
+                        traceId = traceId,
+                        stage = TraceStage.ConfirmReady,
+                        outcome = StageOutcome.Failed,
+                        endedAt = clock(),
+                        attempts = 0,
+                        error = throwable.userMessage(),
+                    )
+                    diagnostics.finishTrace(
+                        traceId = traceId,
+                        outcome = TraceOutcome.Failed,
+                        endedAt = clock(),
+                        error = throwable.userMessage(),
+                    )
                     _state.value = ConfirmState.Error(throwable.userMessage())
                 }
             }
         }
     }
 
+    private fun blockConfirm(message: String) {
+        val endedAt = clock()
+        diagnostics.stageFinished(
+            traceId = traceId,
+            stage = TraceStage.ConfirmReady,
+            outcome = StageOutcome.Failed,
+            endedAt = endedAt,
+            attempts = 0,
+            error = message,
+        )
+        diagnostics.finishTrace(
+            traceId = traceId,
+            outcome = TraceOutcome.Failed,
+            endedAt = endedAt,
+            error = message,
+        )
+        diagnostics.event(
+            DiagLevel.Warn,
+            DiagFlow.Confirm,
+            "confirm_blocked",
+            message = message,
+            traceId = traceId,
+        )
+        _state.value = ConfirmState.Blocked(message)
+    }
+
+    private fun prepareTrace(device: ResolvedDevice) {
+        val nextTraceId = device.traceId.ifBlank {
+            traceId.ifBlank { "trace-${clock()}-confirm" }
+        }
+        if (traceId.isNotBlank() && traceId != nextTraceId && !unlockSucceeded) {
+            finishAbandoned("切换设备")
+        }
+        traceId = nextTraceId
+        unlockSucceeded = false
+        abandonPending = false
+        val startedAt = clock()
+        diagnostics.startTrace(
+            WaterTrace(
+                traceId = traceId,
+                startedAt = startedAt,
+                updatedAt = startedAt,
+                source = "确认页",
+                deviceName = device.detail.name,
+                goodsId = device.scan.id,
+            ),
+        )
+        diagnostics.stageStart(
+            traceId = traceId,
+            stage = TraceStage.ConfirmReady,
+            startedAt = startedAt,
+            attempts = 0,
+            fields = mapOf("goodsId" to device.scan.id),
+        )
+    }
+
+    private fun finishAbandoned(reason: String) {
+        if (traceId.isBlank() || unlockSucceeded) return
+        val endedAt = clock()
+        diagnostics.stageFinished(
+            traceId = traceId,
+            stage = TraceStage.ConfirmReady,
+            outcome = StageOutcome.Abandoned,
+            endedAt = endedAt,
+            attempts = 0,
+            error = reason,
+        )
+        diagnostics.finishTrace(
+            traceId = traceId,
+            outcome = TraceOutcome.Abandoned,
+            endedAt = endedAt,
+            error = reason,
+        )
+        diagnostics.event(
+            DiagLevel.Debug,
+            DiagFlow.Confirm,
+            "confirm_abandoned",
+            message = reason,
+            traceId = traceId,
+        )
+    }
+
+    fun abandon(reason: String) {
+        if (traceId.isBlank() || unlockSucceeded) return
+        if (_state.value is ConfirmState.Unlocking) {
+            abandonPending = true
+            diagnostics.event(
+                DiagLevel.Debug,
+                DiagFlow.Confirm,
+                "abandon_pending",
+                message = reason,
+                traceId = traceId,
+            )
+            return
+        }
+        finishAbandoned(reason)
+    }
+
     fun retryLocation() {
         val device = currentDevice ?: return
         when (val state = _state.value) {
             ConfirmState.NeedsLocationPermission -> {
+                diagnostics.event(
+                    DiagLevel.Debug,
+                    DiagFlow.Confirm,
+                    "location_permission_retry",
+                    traceId = traceId,
+                    fields = mapOf("granted" to locationProvider.hasPermission().toString()),
+                )
                 if (locationProvider.hasPermission()) start(device)
             }
 
             is ConfirmState.Ready -> {
                 if (!locationProvider.hasPermission()) {
+                    diagnostics.event(
+                        DiagLevel.Warn,
+                        DiagFlow.Confirm,
+                        "location_permission_missing",
+                        traceId = traceId,
+                    )
                     _state.value = ConfirmState.NeedsLocationPermission
                     return
                 }
                 if (state.value.locationPhase == LocationPhase.Fetching) return
 
+                diagnostics.event(
+                    DiagLevel.Debug,
+                    DiagFlow.Confirm,
+                    "location_retry",
+                    traceId = traceId,
+                )
                 locationSnapshot = null
                 locationPhase = LocationPhase.Fetching
                 _state.value = ConfirmState.Ready(
@@ -220,6 +372,37 @@ class ConfirmController(
         val ready = (_state.value as? ConfirmState.Ready)?.value ?: return
         val payType = WaterDefaults.payTypeFor(ready.channel)
         if (ready.dryRun) {
+            val at = clock()
+            diagnostics.stageStart(
+                traceId = traceId,
+                stage = TraceStage.Unlock,
+                startedAt = at,
+                attempts = 0,
+                fields = mapOf("dryRun" to "true"),
+            )
+            diagnostics.stageFinished(
+                traceId = traceId,
+                stage = TraceStage.Unlock,
+                outcome = StageOutcome.Abandoned,
+                endedAt = at,
+                attempts = 0,
+                error = "dry-run",
+                fields = mapOf(
+                    "dryRun" to "true",
+                    "channel" to ready.channel.method.toString(),
+                ),
+            )
+            diagnostics.finishTrace(traceId, TraceOutcome.Abandoned, at, "dry-run")
+            diagnostics.event(
+                DiagLevel.Info,
+                DiagFlow.Confirm,
+                "unlock_dry_run",
+                traceId = traceId,
+                fields = mapOf(
+                    "goodsId" to ready.device.scan.id,
+                    "channel" to ready.channel.methodName,
+                ),
+            )
             _state.value = ConfirmState.DryRun(
                 DryRunInfo(
                     deviceName = ready.device.detail.name,
@@ -236,10 +419,41 @@ class ConfirmController(
         }
 
         val location = ready.location
-        if (ready.locationPhase != LocationPhase.Ready || location == null) return
+        if (ready.locationPhase != LocationPhase.Ready || location == null) {
+            diagnostics.event(
+                DiagLevel.Debug,
+                DiagFlow.Confirm,
+                "unlock_blocked_no_location",
+                traceId = traceId,
+                fields = mapOf("phase" to ready.locationPhase.name),
+            )
+            return
+        }
 
-        _state.value = ConfirmState.Unlocking
         val clickedAt = clock()
+        diagnostics.stageStart(
+            traceId = traceId,
+            stage = TraceStage.Unlock,
+            startedAt = clickedAt,
+            attempts = 1,
+            fields = mapOf(
+                "channel" to ready.channel.methodName,
+                "channelMethod" to ready.channel.method.toString(),
+            ),
+        )
+        diagnostics.event(
+            DiagLevel.Info,
+            DiagFlow.Confirm,
+            "unlock_click",
+            traceId = traceId,
+            fields = mapOf(
+                "goodsId" to ready.device.scan.id,
+                "skuId" to ready.sku.skuId,
+                "channel" to ready.channel.methodName,
+                "oneTap" to ready.oneTap.toString(),
+            ),
+        )
+        _state.value = ConfirmState.Unlocking
         scope.launch {
             var bindStats = BindStats()
             var unlockCallMs = 0L
@@ -263,6 +477,40 @@ class ConfirmController(
                 }
 
                 val totalMs = clock() - clickedAt
+                val attempts = 1 + sync.polls + if (bindStats.skipped) 0 else 1
+                val unlockFields = buildMap {
+                    put("channel", ready.channel.methodName)
+                    put("channelMethod", ready.channel.method.toString())
+                    put("bindSkipped", bindStats.skipped.toString())
+                    put("prebound", bindStats.prebound.toString())
+                    put("bindWaitMs", bindStats.waitMs.toString())
+                    put("bindCallMs", bindStats.callMs.toString())
+                    put("unlockCallMs", unlockCallMs.toString())
+                    put("syncPolls", sync.polls.toString())
+                    put("syncDurationMs", sync.durationMs.toString())
+                    put("totalMs", totalMs.toString())
+                }
+                val abandoned = abandonPending
+                val endedAt = clock()
+                diagnostics.stageFinished(
+                    traceId = traceId,
+                    stage = TraceStage.Unlock,
+                    outcome = if (abandoned) StageOutcome.Abandoned else StageOutcome.Success,
+                    endedAt = endedAt,
+                    attempts = attempts,
+                    error = if (abandoned) "离开确认页" else "",
+                    fields = unlockFields,
+                )
+                if (abandoned) {
+                    diagnostics.finishTrace(
+                        traceId = traceId,
+                        outcome = TraceOutcome.Abandoned,
+                        endedAt = endedAt,
+                        error = "离开确认页",
+                    )
+                } else {
+                    unlockSucceeded = true
+                }
                 _state.value = ConfirmState.Unlocked(
                     UnlockSession(
                         device = ready.device,
@@ -270,7 +518,15 @@ class ConfirmController(
                         channel = ready.channel,
                         unlock = unlock,
                         location = location,
+                        traceId = traceId,
                     ),
+                )
+                diagnostics.event(
+                    if (abandoned) DiagLevel.Warn else DiagLevel.Info,
+                    DiagFlow.Confirm,
+                    if (abandoned) "unlock_ok_abandoned" else "unlock_ok",
+                    traceId = traceId,
+                    fields = unlockFields,
                 )
                 reportTiming(
                     buildTiming(
@@ -287,6 +543,38 @@ class ConfirmController(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (throwable: Throwable) {
+                val endedAt = clock()
+                diagnostics.stageFinished(
+                    traceId = traceId,
+                    stage = TraceStage.Unlock,
+                    outcome = StageOutcome.Failed,
+                    endedAt = endedAt,
+                    attempts = 1 + sync.polls + if (bindStats.skipped) 0 else 1,
+                    error = throwable.userMessage(),
+                    fields = mapOf(
+                        "channel" to ready.channel.methodName,
+                        "unlockCallMs" to unlockCallMs.toString(),
+                        "syncPolls" to sync.polls.toString(),
+                        "errorKind" to errorKind(throwable),
+                    ),
+                )
+                diagnostics.finishTrace(
+                    traceId = traceId,
+                    outcome = TraceOutcome.Failed,
+                    endedAt = endedAt,
+                    error = throwable.userMessage(),
+                )
+                diagnostics.event(
+                    DiagLevel.Warn,
+                    DiagFlow.Confirm,
+                    "unlock_fail",
+                    message = throwable.userMessage(),
+                    traceId = traceId,
+                    fields = mapOf(
+                        "channel" to ready.channel.methodName,
+                        "errorKind" to errorKind(throwable),
+                    ),
+                )
                 reportTiming(
                     buildTiming(
                         outcome = UnlockOutcome.Failed,
@@ -372,6 +660,12 @@ class ConfirmController(
 
             locationSnapshot = point?.let(::toSnapshot)
             locationPhase = if (point == null) LocationPhase.Failed else LocationPhase.Ready
+            diagnostics.event(
+                if (point == null) DiagLevel.Warn else DiagLevel.Debug,
+                DiagFlow.Confirm,
+                if (point == null) "location_fail" else "location_ok",
+                traceId = traceId,
+            )
 
             val ready = (_state.value as? ConfirmState.Ready)?.value ?: return@launch
             if (ready.device != device) return@launch
@@ -390,6 +684,7 @@ class ConfirmController(
         skus: List<Sku>,
         channels: List<PayChannelRoute>,
         gen: Int,
+        fromCache: Boolean,
     ): Boolean {
         if (gen != generation) return false
 
@@ -417,6 +712,35 @@ class ConfirmController(
             confirmed = confirmed != null,
         )
         _state.value = ConfirmState.Ready(ready)
+        val readyAt = clock()
+        diagnostics.stageFinished(
+            traceId = traceId,
+            stage = TraceStage.ConfirmReady,
+            outcome = StageOutcome.Success,
+            endedAt = readyAt,
+            attempts = if (fromCache) 0 else PLAN_REQUEST_ATTEMPTS,
+            fields = mapOf(
+                "fromCache" to fromCache.toString(),
+                "skus" to skus.size.toString(),
+                "channels" to channels.size.toString(),
+                "locationPhase" to locationPhase.name,
+                "oneTap" to oneTap.toString(),
+                "dryRun" to dryRun.toString(),
+            ),
+        )
+        diagnostics.event(
+            DiagLevel.Info,
+            DiagFlow.Confirm,
+            "confirm_ready",
+            traceId = traceId,
+            fields = mapOf(
+                "goodsId" to device.scan.id,
+                "fromCache" to fromCache.toString(),
+                "skuId" to ready.sku.skuId,
+                "channel" to ready.channel.methodName,
+                "locationPhase" to locationPhase.name,
+            ),
+        )
         launchPrebind(ready, gen)
         maybeAutoUnlock(device, gen)
         return true
@@ -567,6 +891,7 @@ class ConfirmController(
     private companion object {
         /** 回退开关：关闭后恢复“点击时才绑定通道”的旧行为。 */
         const val PREBIND_ENABLED = true
+        const val PLAN_REQUEST_ATTEMPTS = 2
         const val POLL_TIMEOUT_MS = 15_000L
 
         /** 前 9 次请求覆盖约 2 秒（首轮立即，随后 8 个 250ms 间隔）。 */

@@ -236,5 +236,6 @@ class AppGraph(context: Context) {
         settingsStore = settingsStore,
         configStore = deviceConfigStore,
         timingSink = if (BuildConfig.DEBUG) UnlockTimingLog else NoopUnlockTimingSink,
+        diagnostics = diagnostics,
     )
 }
