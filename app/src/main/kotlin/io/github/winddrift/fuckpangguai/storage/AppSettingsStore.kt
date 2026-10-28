@@ -7,6 +7,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.winddrift.fuckpangguai.BuildConfig
 import io.github.winddrift.fuckpangguai.points.PointsSettingsSource
 import io.github.winddrift.fuckpangguai.storage.appDataStore
+import io.github.winddrift.fuckpangguai.water.WaterConversion
+import io.github.winddrift.fuckpangguai.water.WaterConversionValidation
+import io.github.winddrift.fuckpangguai.water.validateWaterConversion
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -116,6 +119,41 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
         context.appDataStore.edit { it[POINTS_RISK_ACKNOWLEDGED] = true }
     }
 
+    val waterConversion: Flow<WaterConversion?> = context.appDataStore.data.map { preferences ->
+        preferences.toWaterConversion()
+    }
+
+    suspend fun getWaterConversion(): WaterConversion? =
+        context.appDataStore.data.first().toWaterConversion()
+
+    suspend fun setWaterConversion(conversion: WaterConversion?) {
+        context.appDataStore.edit { preferences ->
+            if (conversion == null) {
+                preferences.remove(WATER_USAGE_BASE)
+                preferences.remove(WATER_VOLUME_ML)
+                preferences.remove(WATER_CUP_ML)
+            } else {
+                preferences[WATER_USAGE_BASE] = conversion.usageBase.toPlainString()
+                preferences[WATER_VOLUME_ML] = conversion.waterMl.toPlainString()
+                val cupMl = conversion.cupMl
+                if (cupMl == null) {
+                    preferences.remove(WATER_CUP_ML)
+                } else {
+                    preferences[WATER_CUP_ML] = cupMl.toPlainString()
+                }
+            }
+        }
+    }
+
+    private fun androidx.datastore.preferences.core.Preferences.toWaterConversion(): WaterConversion? {
+        val validation = validateWaterConversion(
+            usageBaseText = this[WATER_USAGE_BASE].orEmpty(),
+            waterMlText = this[WATER_VOLUME_ML].orEmpty(),
+            cupMlText = this[WATER_CUP_ML].orEmpty(),
+        )
+        return (validation as? WaterConversionValidation.Valid)?.conversion
+    }
+
     private companion object {
         val ONE_TAP = booleanPreferencesKey("one_tap_unlock")
         val SKIP_DEVICE_INFO = booleanPreferencesKey("skip_device_info")
@@ -129,6 +167,9 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
         val POINTS_RUN_ON_LAUNCH = booleanPreferencesKey("points_run_on_launch")
         val POINTS_EXPERIMENT_ENABLED = booleanPreferencesKey("points_direct_task_experiment")
         val POINTS_RISK_ACKNOWLEDGED = booleanPreferencesKey("points_risk_acknowledged")
+        val WATER_USAGE_BASE = stringPreferencesKey("water_usage_base")
+        val WATER_VOLUME_ML = stringPreferencesKey("water_volume_ml")
+        val WATER_CUP_ML = stringPreferencesKey("water_cup_ml")
     }
 }
 
