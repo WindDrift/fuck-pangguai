@@ -33,6 +33,7 @@ import io.github.winddrift.fuckpangguai.ui.components.ConfirmDialog
 import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceGroup
+import io.github.winddrift.fuckpangguai.water.formatConversionRule
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,6 +47,7 @@ import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Promotions
 import top.yukonga.miuix.kmp.icon.extended.SearchDevice
 import top.yukonga.miuix.kmp.icon.extended.Theme
+import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -80,6 +82,8 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = false)
     val autoStartCamera by settingsStore.autoStartCamera
         .collectAsStateWithLifecycle(initialValue = true)
+    val waterConversion by settingsStore.waterConversion
+        .collectAsStateWithLifecycle(initialValue = null)
     val assetState by assetController.state.collectAsStateWithLifecycle()
     val assetMatchesActive = assetState.accountId == activeAccount?.localId
     var showSwitchSheet by remember { mutableStateOf(false) }
@@ -93,6 +97,7 @@ fun SettingsScreen(
     var showClearConfirm by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var showLogoutOptions by remember { mutableStateOf(false) }
+    var showWaterConversion by remember { mutableStateOf(false) }
     var logoutRecordCount by remember { mutableStateOf(0) }
     var logoutExported by remember { mutableStateOf(false) }
     var pendingCsv by remember { mutableStateOf<String?>(null) }
@@ -310,6 +315,20 @@ fun SettingsScreen(
                     title = "跳过设备信息",
                     summary = "识别成功后直接进入确认设备页，可配合一键解锁实现扫码即开",
                 )
+                PreferenceDivider()
+                ArrowPreference(
+                    title = "水量换算",
+                    summary = waterConversion?.let(::formatConversionRule)
+                        ?: "未设置，用量保持原样",
+                    startAction = {
+                        Icon(
+                            imageVector = MiuixIcons.Tune,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    },
+                    onClick = { showWaterConversion = true },
+                )
                 if (nfc != NfcAvailability.Unsupported) {
                     PreferenceDivider()
                     ArrowPreference(
@@ -508,6 +527,28 @@ fun SettingsScreen(
         onReauth = onReauthAccount,
         onRename = onRenameAccount,
         onDelete = onDeleteAccount,
+    )
+
+    WaterConversionSheet(
+        show = showWaterConversion,
+        conversion = waterConversion,
+        onDismiss = { showWaterConversion = false },
+        onSave = { conversion ->
+            showWaterConversion = false
+            scope.launch {
+                runCatching { settingsStore.setWaterConversion(conversion) }
+                    .onSuccess { snackbar.show("水量换算已保存") }
+                    .onFailure { snackbar.show("保存失败，请重试", isError = true) }
+            }
+        },
+        onClear = {
+            showWaterConversion = false
+            scope.launch {
+                runCatching { settingsStore.setWaterConversion(null) }
+                    .onSuccess { snackbar.show("已恢复原始用量显示") }
+                    .onFailure { snackbar.show("清除失败，请重试", isError = true) }
+            }
+        },
     )
 }
 
