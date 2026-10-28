@@ -41,6 +41,7 @@ import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Import
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Promotions
 import top.yukonga.miuix.kmp.icon.extended.SearchDevice
@@ -64,7 +65,8 @@ fun SettingsScreen(
     onReauthAccount: (String) -> Unit,
     onRenameAccount: (String, String) -> Unit,
     onDeleteAccount: (String) -> Unit,
-    onLogout: () -> Unit,
+    onLogout: (Boolean) -> Unit,
+    onHistoryImported: () -> Unit,
     scrollBehavior: ScrollBehavior? = null,
     bottomContentPadding: Dp = 0.dp,
 ) {
@@ -90,7 +92,11 @@ fun SettingsScreen(
     var dryRun by remember { mutableStateOf(true) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showLogoutOptions by remember { mutableStateOf(false) }
+    var logoutRecordCount by remember { mutableStateOf(0) }
+    var logoutExported by remember { mutableStateOf(false) }
     var pendingCsv by remember { mutableStateOf<String?>(null) }
+    var pendingExportForLogout by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         oneTap = settingsStore.isOneTapEnabled()
@@ -101,8 +107,13 @@ fun SettingsScreen(
         ActivityResultContracts.CreateDocument("text/csv"),
     ) { uri ->
         val csv = pendingCsv
+        val forLogout = pendingExportForLogout
         pendingCsv = null
-        if (uri == null || csv == null) return@rememberLauncherForActivityResult
+        pendingExportForLogout = false
+        if (uri == null || csv == null) {
+            if (forLogout) showLogoutOptions = true
+            return@rememberLauncherForActivityResult
+        }
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
@@ -115,21 +126,92 @@ fun SettingsScreen(
                 if (ok) "CSV 已导出" else "CSV 导出失败",
                 isError = !ok,
             )
+            if (forLogout) {
+                logoutExported = ok
+                showLogoutOptions = true
+            }
         }
     }
 
-    fun exportCsv() {
+    fun exportCsv(returnToLogout: Boolean = false) {
         scope.launch {
             val records = runCatching { historyRepository.list() }.getOrElse {
                 snackbar.show("读取记录失败", isError = true)
+                if (returnToLogout) showLogoutOptions = true
                 return@launch
             }
             if (records.isEmpty()) {
                 snackbar.show("还没有可导出的记录")
+                if (returnToLogout) showLogoutOptions = true
                 return@launch
             }
             pendingCsv = records.toCsv()
+            pendingExportForLogout = returnToLogout
             exportLauncher.launch("pangguai-history.csv")
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val csv = withContext(Dispatchers.IO) {
+                runCatching {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                        input.readBytes()
+                    } ?: error("无法读取文件")
+                    if (bytes.size > MAX_IMPORT_BYTES) error("文件超过 8 MB，无法导入")
+                    String(bytes, Charsets.UTF_8)
+                }
+            }
+            csv.onFailure { throwable ->
+                snackbar.show(throwable.message ?: "读取文件失败", isError = true)
+            }
+            csv.onSuccess { content ->
+                runCatching { historyRepository.importCsv(content) }
+                    .onSuccess { result ->
+                        when {
+                            result.formatError -> snackbar.show(
+                                "无法识别该 CSV 文件",
+                                isError = true,
+                            )
+
+                            result.inserted == 0 &&
+                                result.duplicates == 0 &&
+                                result.invalid == 0 -> snackbar.show("CSV 中没有可导入的记录")
+
+                            else -> {
+                                snackbar.show(
+                                    "导入完成：新增 ${result.inserted} 条，" +
+                                        "跳过重复 ${result.duplicates} 条，" +
+                                        "失败 ${result.invalid} 条",
+                                    isError = result.inserted == 0 && result.invalid > 0,
+                                )
+                                if (result.inserted > 0) onHistoryImported()
+                            }
+                        }
+                    }
+                    .onFailure { throwable ->
+                        snackbar.show(throwable.message ?: "导入失败", isError = true)
+                    }
+            }
+        }
+    }
+
+    fun requestLogout() {
+        scope.launch {
+            val count = runCatching { historyRepository.count() }.getOrElse {
+                snackbar.show("读取接水记录失败", isError = true)
+                return@launch
+            }
+            if (count > 0) {
+                logoutRecordCount = count
+                logoutExported = false
+                showLogoutOptions = true
+            } else {
+                showLogoutConfirm = true
+            }
         }
     }
 
@@ -281,7 +363,28 @@ fun SettingsScreen(
                             modifier = Modifier.padding(end = 12.dp),
                         )
                     },
-                    onClick = ::exportCsv,
+                    onClick = { exportCsv() },
+                )
+                PreferenceDivider()
+                ArrowPreference(
+                    title = "导入 CSV",
+                    summary = "从本应用导出的 CSV 恢复接水记录，重复订单号会自动跳过",
+                    startAction = {
+                        Icon(
+                            imageVector = MiuixIcons.Import,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    },
+                    onClick = {
+                        importLauncher.launch(
+                            arrayOf(
+                                "text/*",
+                                "application/csv",
+                                "application/vnd.ms-excel",
+                            ),
+                        )
+                    },
                 )
                 PreferenceDivider()
                 ArrowPreference(
@@ -322,8 +425,8 @@ fun SettingsScreen(
                 PreferenceDivider()
                 ArrowPreference(
                     title = "退出当前账号",
-                    summary = "删除本机当前账号；若还有其他账号会自动切换",
-                    onClick = { showLogoutConfirm = true },
+                    summary = "退出前可保留或导出接水记录；若还有其他账号会自动切换",
+                    onClick = ::requestLogout,
                 )
             }
         }
@@ -366,14 +469,33 @@ fun SettingsScreen(
     ConfirmDialog(
         show = showLogoutConfirm,
         title = "退出当前账号？",
-        summary = "本机保存的该账号 token、资料、接水历史与资产缓存会被删除；若还有其他有效账号会自动切换。",
+        summary = "本机保存的该账号 token、资料与资产缓存会被删除；若还有其他有效账号会自动切换。",
         confirmText = "退出",
         destructive = true,
         onConfirm = {
             showLogoutConfirm = false
-            onLogout()
+            onLogout(false)
         },
         onDismiss = { showLogoutConfirm = false },
+    )
+
+    LogoutOptionsDialog(
+        show = showLogoutOptions,
+        recordCount = logoutRecordCount,
+        exported = logoutExported,
+        onKeepAndLogout = {
+            showLogoutOptions = false
+            onLogout(true)
+        },
+        onExport = {
+            showLogoutOptions = false
+            exportCsv(returnToLogout = true)
+        },
+        onDeleteAndLogout = {
+            showLogoutOptions = false
+            onLogout(false)
+        },
+        onDismiss = { showLogoutOptions = false },
     )
 
     AccountSwitchSheet(
@@ -388,3 +510,5 @@ fun SettingsScreen(
         onDelete = onDeleteAccount,
     )
 }
+
+private const val MAX_IMPORT_BYTES = 8 * 1024 * 1024

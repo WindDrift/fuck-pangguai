@@ -60,6 +60,7 @@ class AccountStore(
                 tokenCipher = tokenEncrypted.cipherText,
                 tokenIv = tokenEncrypted.iv,
                 invalid = false,
+                loggedOut = false,
                 lastUsedAt = now,
                 phoneMasked = phone.takeIf { it.isNotBlank() }?.let(::maskPhone)
                     ?: existing.phoneMasked,
@@ -184,6 +185,30 @@ class AccountStore(
     suspend fun deleteActive(): StoredAccount? {
         val activeId = _activeAccount.value?.localId ?: return null
         return delete(activeId)
+    }
+
+    /** 退出登录但保留账号资料与接水记录，清除 token 并标记为已退出。 */
+    suspend fun logoutKeep(localId: String): StoredAccount? = mutex.withLock {
+        initializeLocked()
+        if (_accounts.value.none { it.localId == localId }) {
+            return@withLock _activeAccount.value
+        }
+        val updated = _accounts.value.map {
+            if (it.localId == localId) {
+                it.copy(
+                    tokenCipher = "",
+                    tokenIv = "",
+                    invalid = true,
+                    loggedOut = true,
+                )
+            } else {
+                it
+            }
+        }
+        val next = nextAccountAfterDelete(updated, localId)
+            ?: updated.first { it.localId == localId }
+        writeLocked(updated, next.localId)
+        _activeAccount.value
     }
 
     suspend fun markInvalidIfActive(token: String): StoredAccount? = mutex.withLock {

@@ -183,16 +183,19 @@ class AppController(
         }
     }
 
-    fun logoutCurrent() {
+    fun logoutCurrent(keepRecords: Boolean = false) {
         if (!canChangeAccount()) return
         launchBusy {
-            accountRepository.logoutActive()
+            accountRepository.logoutActive(keepRecords)
             val active = accountRepository.hasActiveSession()
             val next = accountRepository.activeAccount.value
-            val message = if (active && next != null) {
-                "已退出当前账号，已切换到 ${displayName(next)}"
-            } else {
-                "已退出当前账号"
+            val message = when {
+                keepRecords && active && next != null ->
+                    "已退出当前账号，接水记录已保留，已切换到 ${displayName(next)}"
+
+                keepRecords -> "已退出当前账号，接水记录已保留"
+                active && next != null -> "已退出当前账号，已切换到 ${displayName(next)}"
+                else -> "已退出当前账号"
             }
             updateStateAfterAccountRemoval(active, message)
             _accountChanged.tryEmit(Unit)

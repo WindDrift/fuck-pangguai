@@ -116,7 +116,7 @@ class AppGraph(context: Context) {
         api = api,
         accountStore = accountStore,
         historyRepository = historyRepository,
-        onAccountDeleted = { localId ->
+        onAccountCleared = { localId ->
             assetSnapshotStore.delete(localId)
             deviceRepository.clearAccountCache(localId)
             pendingRechargeStore.clear(localId)

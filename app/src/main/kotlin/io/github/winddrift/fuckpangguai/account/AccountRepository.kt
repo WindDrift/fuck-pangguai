@@ -10,7 +10,7 @@ class AccountRepository(
     private val api: QiekjApi,
     private val accountStore: AccountStore,
     private val historyRepository: HistoryRepository,
-    private val onAccountDeleted: suspend (String) -> Unit = {},
+    private val onAccountCleared: suspend (String) -> Unit = {},
 ) {
     val accounts = accountStore.accounts
     val activeAccount = accountStore.activeAccount
@@ -59,13 +59,16 @@ class AccountRepository(
         if (!exists) return accountStore.activeAccount.value
         val next = accountStore.delete(localId)
         runCatching { historyRepository.clearForAccount(localId) }
-        runCatching { onAccountDeleted(localId) }
+        runCatching { onAccountCleared(localId) }
         return next
     }
 
-    suspend fun logoutActive(): StoredAccount? {
+    suspend fun logoutActive(keepRecords: Boolean = false): StoredAccount? {
         val activeId = accountStore.activeLocalId() ?: return null
-        return delete(activeId)
+        if (!keepRecords) return delete(activeId)
+        val next = accountStore.logoutKeep(activeId)
+        runCatching { onAccountCleared(activeId) }
+        return next
     }
 
     suspend fun markInvalidIfActive(token: String): StoredAccount? =

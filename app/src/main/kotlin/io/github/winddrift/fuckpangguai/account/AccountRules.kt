@@ -47,6 +47,7 @@ internal fun mergedAccount(target: StoredAccount, source: StoredAccount): Stored
         tokenCipher = source.tokenCipher.ifBlank { target.tokenCipher },
         tokenIv = source.tokenIv.ifBlank { target.tokenIv },
         invalid = false,
+        loggedOut = false,
         pendingProfile = false,
         lastUsedAt = maxOf(target.lastUsedAt, source.lastUsedAt),
         lastSyncedAt = maxOf(target.lastSyncedAt, source.lastSyncedAt),

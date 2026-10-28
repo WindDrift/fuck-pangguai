@@ -74,6 +74,17 @@ class AccountRulesTest {
     }
 
     @Test
+    fun `merge clears logged out state`() {
+        val target = account("target", phoneHash = "hash", invalid = true, loggedOut = true)
+        val source = account("source", token = "new-token")
+
+        val merged = mergedAccount(target, source)
+
+        assertTrue(!merged.invalid)
+        assertTrue(!merged.loggedOut)
+    }
+
+    @Test
     fun `next account skips invalid and empty tokens`() {
         val accounts = listOf(
             account("active", lastUsedAt = 40),
@@ -94,6 +105,7 @@ class AccountRulesTest {
         phoneHash: String = "",
         token: String = "token-$localId",
         invalid: Boolean = false,
+        loggedOut: Boolean = false,
         lastUsedAt: Long = 0,
     ) = StoredAccount(
         localId = localId,
@@ -105,6 +117,7 @@ class AccountRulesTest {
         tokenCipher = token,
         tokenIv = if (token.isBlank()) "" else "iv",
         invalid = invalid,
+        loggedOut = loggedOut,
         lastUsedAt = lastUsedAt,
     )
 }

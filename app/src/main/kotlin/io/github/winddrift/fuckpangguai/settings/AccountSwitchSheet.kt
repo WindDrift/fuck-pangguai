@@ -68,7 +68,7 @@ fun AccountSwitchSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "点击有效账号直接切换；失效账号需要重新登录。",
+                text = "点击有效账号直接切换；已退出或失效的账号需要重新登录。",
                 style = MiuixTheme.textStyles.footnote1,
                 color = MiuixTheme.colorScheme.onSurfaceSecondary,
             )
@@ -201,6 +201,12 @@ private fun AccountRow(
                     style = MiuixTheme.textStyles.body1,
                 )
                 when {
+                    account.loggedOut -> Text(
+                        text = "已退出",
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = colors.onSurfaceSecondary,
+                    )
+
                     account.invalid -> Text(
                         text = "已失效",
                         style = MiuixTheme.textStyles.footnote1,

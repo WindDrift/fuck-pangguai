@@ -660,7 +660,10 @@ fun PangguaiRoot(
                             },
                             onRenameAccount = controller::renameAccount,
                             onDeleteAccount = controller::deleteAccount,
-                            onLogout = controller::logoutCurrent,
+                            onLogout = { keepRecords -> controller.logoutCurrent(keepRecords) },
+                            onHistoryImported = {
+                                historyController.refresh(activeAccount?.localId)
+                            },
                             scrollBehavior = settingsScrollBehavior,
                             bottomContentPadding = floatingNavClearance,
                         )

@@ -16,6 +16,7 @@ data class StoredAccount(
     val tokenCipher: String = "",
     val tokenIv: String = "",
     val invalid: Boolean = false,
+    val loggedOut: Boolean = false,
     val pendingProfile: Boolean = true,
     val lastUsedAt: Long = 0L,
     val lastSyncedAt: Long = 0L,
