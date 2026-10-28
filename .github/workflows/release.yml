@@ -61,7 +61,7 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
           test -s "$RUNNER_TEMP/release.jks"
 
-      - name: Build signed release APK
+      - name: Build signed release and diagnostic APKs
         env:
           RELEASE_STORE_FILE: ${{ runner.temp }}/release.jks
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -69,25 +69,48 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           QIEKJ_APP_SECRET: ${{ secrets.QIEKJ_APP_SECRET }}
           QIEKJ_LOCATION_SECRET: ${{ secrets.QIEKJ_LOCATION_SECRET }}
-        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        run: ./gradlew :app:assembleRelease :app:assembleDiagnostic --no-daemon --stacktrace
 
-      - name: Verify APK signature
+      - name: Verify APK signatures and variants
         run: |
+          set -euo pipefail
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           APK=app/build/outputs/apk/release/app-release.apk
+          DIAG=app/build/outputs/apk/diagnostic/app-diagnostic.apk
           test -f "$APK"
+          test -f "$DIAG"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$DIAG"
+          CERT_REL=$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | grep 'SHA-256 digest' | head -n 1)
+          CERT_DIAG=$("$BUILD_TOOLS/apksigner" verify --print-certs "$DIAG" | grep 'SHA-256 digest' | head -n 1)
+          test "$CERT_REL" = "$CERT_DIAG"
+          REL_BADGE=$("$BUILD_TOOLS/aapt2" dump badging "$APK" | head -n 1)
+          DIAG_BADGE=$("$BUILD_TOOLS/aapt2" dump badging "$DIAG" | head -n 1)
+          REL_INFO=$(printf '%s' "$REL_BADGE" | sed -E "s/package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'.*/\1|\2|\3/")
+          DIAG_INFO=$(printf '%s' "$DIAG_BADGE" | sed -E "s/package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'.*/\1|\2|\3/")
+          IFS='|' read -r REL_PKG REL_CODE REL_VERSION <<< "$REL_INFO"
+          IFS='|' read -r DIAG_PKG DIAG_CODE DIAG_VERSION <<< "$DIAG_INFO"
+          test "$REL_PKG" = "$DIAG_PKG"
+          test "$REL_CODE" = "$DIAG_CODE"
+          test "$DIAG_VERSION" = "${REL_VERSION}-diagnostic"
+          echo "Verified $REL_PKG $REL_CODE $REL_VERSION / $DIAG_VERSION"
 
       - name: Prepare release assets
         run: |
+          set -euo pipefail
           VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -n 1)
           test -n "$VERSION_NAME"
           APK_NAME="fuck-pangguai-${VERSION_NAME}.apk"
+          DIAG_APK_NAME="fuck-pangguai-${VERSION_NAME}-diagnostic.apk"
           ARTIFACT_NAME="fuck-pangguai-${VERSION_NAME}"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
+          echo "DIAG_APK_NAME=$DIAG_APK_NAME" >> "$GITHUB_ENV"
           echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
           cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          cp app/build/outputs/apk/diagnostic/app-diagnostic.apk "$DIAG_APK_NAME"
+          cp app/build/outputs/mapping/release/mapping.txt mapping.txt
+          cp app/build/outputs/mapping/diagnostic/mapping.txt mapping-diagnostic.txt
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -96,7 +119,9 @@ jobs:
           if-no-files-found: error
           path: |
             ${{ env.APK_NAME }}
-            app/build/outputs/mapping/release/mapping.txt
+            ${{ env.DIAG_APK_NAME }}
+            mapping.txt
+            mapping-diagnostic.txt
 
       - name: Generate release notes
         if: startsWith(github.ref, 'refs/tags/')
@@ -153,6 +178,15 @@ jobs:
           if [ -n "$PREV_TAG" ]; then
             echo "**完整变更**：[${PREV_TAG}...${GITHUB_REF_NAME}](https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${GITHUB_REF_NAME})" >> "$NOTES"
           fi
+          {
+            echo
+            echo "### 诊断包"
+            echo
+            echo "- \`fuck-pangguai-${VERSION_NAME}-diagnostic.apk\` 与正式版同包名、同 versionCode、同正式签名，可覆盖安装。"
+            echo "- 覆盖安装会结束应用进程；接水或支付进行中请勿安装。"
+            echo "- 诊断包在正式版基础上额外记录 Debug 级轮询摘要与更大的响应预览，日志可能包含设备名称、订单号与脱敏响应片段，分享前请检查。"
+            echo
+          } >> "$NOTES"
           cat "$NOTES"
 
       - name: Create GitHub Release
@@ -160,10 +194,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          assets=("$APK_NAME")
-          mapping=app/build/outputs/mapping/release/mapping.txt
-          if [ -f "$mapping" ]; then
-            assets+=("$mapping")
+          assets=("$APK_NAME" "$DIAG_APK_NAME")
+          if [ -f mapping.txt ]; then
+            assets+=(mapping.txt)
+          fi
+          if [ -f mapping-diagnostic.txt ]; then
+            assets+=(mapping-diagnostic.txt)
           fi
           gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
             --title "$GITHUB_REF_NAME" \
