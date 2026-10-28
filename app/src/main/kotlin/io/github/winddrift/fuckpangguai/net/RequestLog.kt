@@ -40,9 +40,11 @@ private val logJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
 internal fun redactResponseBody(body: String): String {
     if (body.isBlank()) return body
-    return runCatching {
-        redactJsonElement(logJson.parseToJsonElement(body)).toString()
-    }.getOrDefault(body)
+    val element = runCatching { logJson.parseToJsonElement(body) }.getOrNull()
+    if (element !is JsonObject && element !is JsonArray) {
+        return "<省略 ${body.toByteArray(Charsets.UTF_8).size} 字节非 JSON 响应>"
+    }
+    return runCatching { redactJsonElement(element).toString() }.getOrDefault("<省略非 JSON 响应>")
 }
 
 private fun redactJsonElement(element: JsonElement): JsonElement = when (element) {
@@ -74,6 +76,15 @@ private val SENSITIVE_RESPONSE_FIELDS = setOf(
     "alipayorderno",
     "unionid",
     "openid",
+    "imei",
+    "sn",
+    "qrcode",
+    "lat",
+    "lng",
+    "latitude",
+    "longitude",
+    "password",
+    "verifycode",
 )
 
 object RequestLog {

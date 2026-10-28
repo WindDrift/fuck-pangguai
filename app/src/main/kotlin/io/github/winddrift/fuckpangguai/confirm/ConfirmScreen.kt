@@ -191,7 +191,7 @@ fun ConfirmScreen(
                             )
                             if (ready.dryRun) {
                                 Text(
-                                    "当前为 Debug 演练模式，不会真实解锁。",
+                                    "当前为演练模式，不会真实解锁。",
                                     style = MiuixTheme.textStyles.footnote1,
                                     color = MiuixTheme.colorScheme.error,
                                 )

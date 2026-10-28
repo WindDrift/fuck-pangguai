@@ -34,9 +34,13 @@ import io.github.winddrift.fuckpangguai.update.UpdateController
 import io.github.winddrift.fuckpangguai.confirm.ConfirmController
 import io.github.winddrift.fuckpangguai.confirm.NoopUnlockTimingSink
 import io.github.winddrift.fuckpangguai.confirm.UnlockTimingLog
+import io.github.winddrift.fuckpangguai.diagnostics.CrashRecorder
+import io.github.winddrift.fuckpangguai.diagnostics.DiagSettingsStore
+import io.github.winddrift.fuckpangguai.diagnostics.Diagnostics
 import io.github.winddrift.fuckpangguai.history.BillRepository
 import io.github.winddrift.fuckpangguai.history.HistoryController
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
+import io.github.winddrift.fuckpangguai.net.DiagnosticNetworkInterceptor
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
@@ -57,6 +61,16 @@ class AppGraph(context: Context) {
 
     val appContext: Context = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    val diagSettingsStore = DiagSettingsStore(appContext)
+    val diagnostics = Diagnostics(
+        context = appContext,
+        settingsStore = diagSettingsStore,
+        appVersion = BuildConfig.VERSION_NAME,
+        buildType = BuildConfig.BUILD_TYPE,
+        scope = scope,
+        previewLimit = if (BuildConfig.DIAGNOSTIC_LOGGING) 16 * 1024 else 4 * 1024,
+    )
 
     val accountStore = AccountStore(appContext)
     val assetSnapshotStore = AssetSnapshotStore(appContext)
@@ -89,8 +103,14 @@ class AppGraph(context: Context) {
             ),
         )
         .addInterceptor(SessionExpiryInterceptor(sessionExpiryNotifier))
+        .addInterceptor(
+            DiagnosticNetworkInterceptor(
+                sink = diagnostics,
+                largePreview = BuildConfig.DIAGNOSTIC_LOGGING,
+            ),
+        )
         .apply {
-            if (BuildConfig.DEBUG) {
+            if (BuildConfig.DEBUG || BuildConfig.DIAGNOSTIC_LOGGING) {
                 addInterceptor(RequestLogInterceptor())
             }
         }
@@ -179,12 +199,23 @@ class AppGraph(context: Context) {
         accountStore = accountStore,
     )
 
+    init {
+        CrashRecorder(
+            appVersion = BuildConfig.VERSION_NAME,
+            buildType = BuildConfig.BUILD_TYPE,
+            traceProvider = { diagnostics.currentTrace() },
+            onCrash = diagnostics::recordCrashSync,
+        ).install()
+        diagnostics.start { waterSessionStore.session.value?.traceId }
+    }
+
     val controller = AppController(
         scope = scope,
         accountRepository = accountRepository,
         disclaimerStore = disclaimerStore,
         sessionExpiryNotifier = sessionExpiryNotifier,
         sessionPhaseProvider = { waterSessionStore.session.value?.phase },
+        diagnostics = diagnostics,
     )
 
     val scanController = ScanController(

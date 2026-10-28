@@ -69,6 +69,8 @@ android {
 
         buildConfigField("String", "QIEKJ_APP_SECRET", buildConfigString(qiekjAppSecret))
         buildConfigField("String", "QIEKJ_LOCATION_SECRET", buildConfigString(qiekjLocationSecret))
+        buildConfigField("boolean", "DIAGNOSTIC_LOGGING", "false")
+        buildConfigField("boolean", "DEFAULT_DRY_RUN", "false")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -85,6 +87,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "DIAGNOSTIC_LOGGING", "true")
+            buildConfigField("boolean", "DEFAULT_DRY_RUN", "true")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -92,6 +98,18 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+        create("diagnostic") {
+            initWith(getByName("release"))
+            isMinifyEnabled = true
+            isShrinkResources = true
+            versionNameSuffix = "-diagnostic"
+            resValue("string", "app_name", "去他妈的胖乖生活（诊断）")
+            buildConfigField("boolean", "DIAGNOSTIC_LOGGING", "true")
+            buildConfigField("boolean", "DEFAULT_DRY_RUN", "false")
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -106,6 +124,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
 
     packaging {

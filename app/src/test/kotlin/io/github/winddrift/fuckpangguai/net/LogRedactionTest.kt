@@ -33,7 +33,11 @@ class LogRedactionTest {
     }
 
     @Test
-    fun `non json body is left unchanged`() {
-        assertEquals("<html>ok</html>", redactResponseBody("<html>ok</html>"))
+    fun `non json body is omitted instead of copied`() {
+        val redacted = redactResponseBody("<html>ok</html>")
+
+        assertFalse(redacted.contains("<html>ok</html>"))
+        assertTrue(redacted.contains("省略"))
+        assertTrue(redacted.contains("非 JSON"))
     }
 }

@@ -10,6 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
 import io.github.winddrift.fuckpangguai.storage.ThemeSettings
 import io.github.winddrift.fuckpangguai.ui.PangguaiRoot
 import io.github.winddrift.fuckpangguai.ui.theme.PangguaiTheme
@@ -18,11 +20,16 @@ import io.github.winddrift.fuckpangguai.ui.theme.resolveDark
 class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
-        (application as PangguaiApp).graph.pointsController.onAppForeground()
+        val graph = (application as PangguaiApp).graph
+        graph.diagnostics.event(DiagLevel.Debug, DiagFlow.App, "foreground")
+        graph.pointsController.onAppForeground()
     }
 
     override fun onStop() {
-        (application as PangguaiApp).graph.pointsController.onAppBackground()
+        val graph = (application as PangguaiApp).graph
+        graph.diagnostics.event(DiagLevel.Debug, DiagFlow.App, "background")
+        graph.diagnostics.flushAsync()
+        graph.pointsController.onAppBackground()
         super.onStop()
     }
 

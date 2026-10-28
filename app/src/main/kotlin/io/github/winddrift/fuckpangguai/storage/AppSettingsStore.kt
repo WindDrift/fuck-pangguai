@@ -35,7 +35,7 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
     }
 
     override suspend fun isDryRun(): Boolean =
-        context.appDataStore.data.first()[DRY_RUN] ?: BuildConfig.DEBUG
+        context.appDataStore.data.first()[DRY_RUN] ?: BuildConfig.DEFAULT_DRY_RUN
 
     suspend fun setDryRun(enabled: Boolean) {
         context.appDataStore.edit { it[DRY_RUN] = enabled }

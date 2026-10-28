@@ -3,6 +3,10 @@ package io.github.winddrift.fuckpangguai
 import io.github.winddrift.fuckpangguai.account.AccountRepository
 import io.github.winddrift.fuckpangguai.account.AuthTarget
 import io.github.winddrift.fuckpangguai.account.displayName
+import io.github.winddrift.fuckpangguai.diagnostics.DiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.NoopDiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
 import io.github.winddrift.fuckpangguai.net.SessionExpiryNotifier
 import io.github.winddrift.fuckpangguai.net.userMessage
 import io.github.winddrift.fuckpangguai.storage.DisclaimerStore
@@ -32,6 +36,7 @@ class AppController(
     private val disclaimerStore: DisclaimerStore,
     private val sessionExpiryNotifier: SessionExpiryNotifier,
     private val sessionPhaseProvider: () -> String?,
+    private val diagnostics: DiagSink = NoopDiagSink,
 ) {
     private val _state = MutableStateFlow<AppState>(AppState.Loading)
     val state = _state.asStateFlow()
@@ -87,6 +92,7 @@ class AppController(
         }
         launchBusy {
             accountRepository.sendCode(phone)
+            diagnostics.event(DiagLevel.Info, DiagFlow.Account, "code_sent")
             _codeSent.value = true
             _message.value = AppMessage("验证码已发送，请查看短信")
         }
@@ -146,10 +152,22 @@ class AppController(
         launchBusy {
             val account = accountRepository.switchTo(localId)
             if (account == null) {
+                diagnostics.event(
+                    DiagLevel.Warn,
+                    DiagFlow.Account,
+                    "account_switch_failed",
+                    fields = mapOf("localId" to localId),
+                )
                 _message.value = AppMessage("该账号已失效，请重新登录", isError = true)
                 beginReauth(localId)
                 return@launchBusy
             }
+            diagnostics.event(
+                DiagLevel.Info,
+                DiagFlow.Account,
+                "account_switch",
+                fields = mapOf("localId" to localId),
+            )
             _state.value = AppState.Ready
             _authTarget.value = AuthTarget.None
             _codeSent.value = false
@@ -171,6 +189,12 @@ class AppController(
         launchBusy {
             val wasActive = accountRepository.activeLocalId() == localId
             accountRepository.delete(localId)
+            diagnostics.event(
+                DiagLevel.Info,
+                DiagFlow.Account,
+                "account_delete",
+                fields = mapOf("localId" to localId, "wasActive" to wasActive.toString()),
+            )
             val active = accountRepository.hasActiveSession()
             val next = accountRepository.activeAccount.value
             val message = when {
@@ -187,6 +211,12 @@ class AppController(
         if (!canChangeAccount()) return
         launchBusy {
             accountRepository.logoutActive(keepRecords)
+            diagnostics.event(
+                DiagLevel.Info,
+                DiagFlow.Account,
+                "logout",
+                fields = mapOf("keepRecords" to keepRecords.toString()),
+            )
             val active = accountRepository.hasActiveSession()
             val next = accountRepository.activeAccount.value
             val message = when {
@@ -207,6 +237,12 @@ class AppController(
     }
 
     private fun completeAuthentication() {
+        diagnostics.event(
+            DiagLevel.Info,
+            DiagFlow.Account,
+            "auth_complete",
+            fields = mapOf("localId" to accountRepository.activeLocalId().orEmpty()),
+        )
         _message.value = null
         _codeSent.value = false
         _authTarget.value = AuthTarget.None
@@ -241,6 +277,12 @@ class AppController(
 
     private suspend fun handleSessionExpiry(token: String) {
         val account = accountRepository.markInvalidIfActive(token) ?: return
+        diagnostics.event(
+            DiagLevel.Warn,
+            DiagFlow.Account,
+            "session_expired",
+            fields = mapOf("localId" to account.localId),
+        )
         _state.value = AppState.Login
         _authTarget.value = AuthTarget.Reauth(account.localId)
         _reauthPhone.value = accountRepository.getPhone(account.localId).orEmpty()

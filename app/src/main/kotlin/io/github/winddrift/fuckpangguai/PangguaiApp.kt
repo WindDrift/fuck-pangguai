@@ -4,6 +4,8 @@ import android.app.Application
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
 import io.github.winddrift.fuckpangguai.service.NotificationChannels
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -29,6 +31,15 @@ class PangguaiApp : Application() {
                 .build()
         }
         graph = AppGraph(this)
+        graph.diagnostics.event(
+            DiagLevel.Info,
+            DiagFlow.App,
+            "app_start",
+            fields = mapOf(
+                "version" to BuildConfig.VERSION_NAME,
+                "buildType" to BuildConfig.BUILD_TYPE,
+            ),
+        )
         NotificationChannels.ensure(this)
     }
 }
