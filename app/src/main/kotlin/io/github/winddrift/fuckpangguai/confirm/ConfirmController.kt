@@ -23,6 +23,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 import java.util.Locale
@@ -104,11 +106,18 @@ class ConfirmController(
     private var autoUnlockTriggered = false
     private var locationSnapshot: LocationSnapshot? = null
     private var locationPhase = LocationPhase.Fetching
+    private val bindMutex = Mutex()
+    private var boundChannel: Int? = null
+    private var boundByPrebind = false
+    private var prebindAttempted = false
 
     fun start(device: ResolvedDevice) {
         val gen = ++generation
         currentDevice = device
         autoUnlockTriggered = false
+        boundChannel = null
+        boundByPrebind = false
+        prebindAttempted = false
         locationSnapshot = null
         locationPhase = LocationPhase.Fetching
         loadJob?.cancel()
@@ -236,9 +245,7 @@ class ConfirmController(
             var unlockCallMs = 0L
             var sync = SyncOutcome(ready = false, polls = 0, durationMs = 0L)
             try {
-                val bindStartedAt = clock()
-                deviceRepository.bindChannel(ready.channel.method)
-                bindStats = BindStats(callMs = clock() - bindStartedAt)
+                bindStats = ensureBound(ready.channel.method)
 
                 val unlockStartedAt = clock()
                 val unlock = waterRepository.unlock(
@@ -255,15 +262,6 @@ class ConfirmController(
                     throw ApiException(-1, "设备启动超时，请检查设备状态")
                 }
 
-                configStore.save(
-                    ConfirmedDevice(
-                        goodsId = ready.device.scan.id,
-                        skuId = ready.sku.skuId,
-                        channelMethod = ready.channel.method,
-                        deviceName = ready.device.detail.name,
-                        updatedAt = clock(),
-                    ),
-                )
                 val totalMs = clock() - clickedAt
                 _state.value = ConfirmState.Unlocked(
                     UnlockSession(
@@ -285,6 +283,7 @@ class ConfirmController(
                         errorKind = null,
                     ),
                 )
+                persistConfirmedAsync(ready)
             } catch (exception: CancellationException) {
                 throw exception
             } catch (throwable: Throwable) {
@@ -307,6 +306,54 @@ class ConfirmController(
                 } catch (_: Throwable) {
                 }
                 _state.value = ConfirmState.Error(message)
+            }
+        }
+    }
+
+    private suspend fun ensureBound(method: Int): BindStats {
+        val waitStartedAt = clock()
+        return bindMutex.withLock {
+            if (boundChannel == method) {
+                return@withLock BindStats(
+                    skipped = true,
+                    prebound = boundByPrebind,
+                    waitMs = (clock() - waitStartedAt).coerceAtLeast(0L),
+                )
+            }
+            val callStartedAt = clock()
+            try {
+                deviceRepository.bindChannel(method)
+            } catch (throwable: Throwable) {
+                boundChannel = null
+                boundByPrebind = false
+                throw throwable
+            }
+            boundChannel = method
+            boundByPrebind = false
+            BindStats(
+                skipped = false,
+                prebound = false,
+                waitMs = (callStartedAt - waitStartedAt).coerceAtLeast(0L),
+                callMs = (clock() - callStartedAt).coerceAtLeast(0L),
+            )
+        }
+    }
+
+    private fun persistConfirmedAsync(ready: ConfirmReady) {
+        scope.launch {
+            try {
+                configStore.save(
+                    ConfirmedDevice(
+                        goodsId = ready.device.scan.id,
+                        skuId = ready.sku.skuId,
+                        channelMethod = ready.channel.method,
+                        deviceName = ready.device.detail.name,
+                        updatedAt = clock(),
+                    ),
+                )
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Throwable) {
             }
         }
     }
@@ -370,8 +417,31 @@ class ConfirmController(
             confirmed = confirmed != null,
         )
         _state.value = ConfirmState.Ready(ready)
+        launchPrebind(ready, gen)
         maybeAutoUnlock(device, gen)
         return true
+    }
+
+    private fun launchPrebind(ready: ConfirmReady, gen: Int) {
+        if (!PREBIND_ENABLED || ready.dryRun || prebindAttempted) return
+        prebindAttempted = true
+        val method = ready.channel.method
+        scope.launch {
+            try {
+                bindMutex.withLock {
+                    if (gen != generation || boundChannel == method) return@withLock
+                    deviceRepository.bindChannel(method)
+                    if (gen == generation) {
+                        boundChannel = method
+                        boundByPrebind = true
+                    }
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Throwable) {
+                // 预绑定失败静默，点击解锁时会重试。
+            }
+        }
     }
 
     private fun launchCacheRefresh(device: ResolvedDevice) {
@@ -437,7 +507,7 @@ class ConfirmController(
         outcome = outcome,
         channelMethod = ready.channel.method,
         channelName = ready.channel.methodName,
-        prebindAttempted = false,
+        prebindAttempted = prebindAttempted,
         prebound = bindStats.prebound,
         bindSkipped = bindStats.skipped,
         bindWaitMs = bindStats.waitMs,
@@ -487,5 +557,10 @@ class ConfirmController(
         "4204" -> "设备离线，请检查设备是否通电"
         "5023" -> serverMessage ?: "设备当前不可用"
         else -> serverMessage?.takeIf { it.isNotBlank() } ?: "设备故障（$code）"
+    }
+
+    private companion object {
+        /** 回退开关：关闭后恢复“点击时才绑定通道”的旧行为。 */
+        const val PREBIND_ENABLED = true
     }
 }

@@ -203,17 +203,166 @@ class ConfirmControllerTest {
     }
 
     @Test
-    fun `real unlock binds channel then unlocks`() = runTest {
+    fun `confirmation page prebinds the selected channel`() = runTest {
         val deps = Deps()
         val controller = deps.controller(this)
         controller.start(deps.device)
         advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Ready)
+        assertEquals(1, deps.deviceSource.bindCalls)
+        assertEquals(listOf(15), deps.deviceSource.bindMethods)
+        assertEquals(0, deps.waterSource.unlockCalls)
+    }
+
+    @Test
+    fun `unlock skips bind after prebind and unlocks`() = runTest {
+        val deps = Deps()
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        assertEquals(1, deps.deviceSource.bindCalls)
+
         controller.unlock()
         advanceUntilIdle()
+
         assertTrue(controller.state.value is ConfirmState.Unlocked)
         assertEquals(1, deps.deviceSource.bindCalls)
         assertEquals(1, deps.waterSource.unlockCalls)
+        assertEquals(listOf("bind:15", "unlock"), deps.events)
         assertNotNull(deps.configSource.saved)
+    }
+
+    @Test
+    fun `prebind failure is silent and retried on unlock`() = runTest {
+        val deps = Deps()
+        deps.deviceSource.bindFailures = 1
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Ready)
+        assertEquals(1, deps.deviceSource.bindCalls)
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(2, deps.deviceSource.bindCalls)
+        assertEquals(listOf("bind:15", "bind:15", "unlock"), deps.events)
+    }
+
+    @Test
+    fun `changing channel rebinds before unlocking`() = runTest {
+        val deps = Deps()
+        deps.deviceSource.plans = deps.deviceSource.plans.copy(
+            channels = listOf(
+                PayChannelRoute(method = 15, methodName = "支付宝免密", checked = true),
+                PayChannelRoute(method = 18, methodName = "微信"),
+            ),
+        )
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        assertEquals(1, deps.deviceSource.bindCalls)
+
+        controller.selectChannel(1)
+        controller.unlock()
+        advanceUntilIdle()
+
+        val unlocked = controller.state.value as ConfirmState.Unlocked
+        assertEquals(18, unlocked.session.channel.method)
+        assertEquals(listOf(15, 18), deps.deviceSource.bindMethods)
+        assertEquals(listOf("bind:15", "bind:18", "unlock"), deps.events)
+    }
+
+    @Test
+    fun `unlock waits for in-flight prebind and does not bind twice`() = runTest {
+        val deps = Deps()
+        val gate = CompletableDeferred<Unit>()
+        deps.deviceSource.bindGate = gate
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocking)
+        assertEquals(1, deps.deviceSource.bindCalls)
+        assertEquals(0, deps.waterSource.unlockCalls)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(1, deps.deviceSource.bindCalls)
+        assertEquals(listOf("bind:15", "unlock"), deps.events)
+    }
+
+    @Test
+    fun `channel change waits for in-flight prebind then binds the new channel`() = runTest {
+        val deps = Deps()
+        deps.deviceSource.plans = deps.deviceSource.plans.copy(
+            channels = listOf(
+                PayChannelRoute(method = 15, methodName = "支付宝免密", checked = true),
+                PayChannelRoute(method = 18, methodName = "微信"),
+            ),
+        )
+        val gate = CompletableDeferred<Unit>()
+        deps.deviceSource.bindGate = gate
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.selectChannel(1)
+        controller.unlock()
+        advanceUntilIdle()
+        assertTrue(controller.state.value is ConfirmState.Unlocking)
+        assertEquals(listOf(15), deps.deviceSource.bindMethods)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        val unlocked = controller.state.value as ConfirmState.Unlocked
+        assertEquals(18, unlocked.session.channel.method)
+        assertEquals(listOf(15, 18), deps.deviceSource.bindMethods)
+        assertEquals(listOf("bind:15", "bind:18", "unlock"), deps.events)
+    }
+
+    @Test
+    fun `unlocked is published before config save completes`() = runTest {
+        val deps = Deps()
+        val gate = CompletableDeferred<Unit>()
+        deps.configSource.saveGate = gate
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertNull(deps.configSource.saved)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertNotNull(deps.configSource.saved)
+    }
+
+    @Test
+    fun `config save failure keeps unlocked state`() = runTest {
+        val deps = Deps()
+        deps.configSource.saveFails = true
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertNull(deps.configSource.saved)
     }
 
     @Test
@@ -248,6 +397,9 @@ class ConfirmControllerTest {
         assertEquals(15, timing.channelMethod)
         assertEquals("支付宝免密", timing.channelName)
         assertEquals(1, timing.syncPollCount)
+        assertTrue(timing.prebindAttempted)
+        assertTrue(timing.prebound)
+        assertTrue(timing.bindSkipped)
         assertTrue(timing.totalMs >= 0)
         assertTrue(timing.toText().contains("成功"))
     }
@@ -260,7 +412,9 @@ class ConfirmControllerTest {
         controller.start(deps.device)
         advanceUntilIdle()
         assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(1, deps.deviceSource.bindCalls)
         assertEquals(1, deps.waterSource.unlockCalls)
+        assertEquals(listOf("bind:15", "unlock"), deps.events)
     }
 
     @Test
@@ -442,10 +596,11 @@ class ConfirmControllerTest {
             sourceKey = "SN",
             sourceValue = "860456070165314",
         )
-        val deviceSource = FakeDeviceSource(cachedPlans).also {
+        val events = mutableListOf<String>()
+        val deviceSource = FakeDeviceSource(cachedPlans, events).also {
             it.refreshFails = refreshFails
         }
-        val waterSource = FakeWaterSource(msgReady, unlockFails)
+        val waterSource = FakeWaterSource(msgReady, unlockFails, events)
         val locationSource = FakeLocationSource(locationGranted)
         val settingsSource = FakeSettingsSource(oneTap, dryRun)
         val configSource = FakeConfigSource()
@@ -465,8 +620,12 @@ class ConfirmControllerTest {
 
     private class FakeDeviceSource(
         var cachedPlans: DevicePlans?,
+        private val events: MutableList<String> = mutableListOf(),
     ) : DeviceDataSource {
         var bindCalls = 0
+        var bindMethods = mutableListOf<Int>()
+        var bindFailures = 0
+        var bindGate: CompletableDeferred<Unit>? = null
         var loadCalls = 0
         var refreshCalls = 0
         var clearCalls = 0
@@ -486,6 +645,15 @@ class ConfirmControllerTest {
 
         override suspend fun bindChannel(method: Int) {
             bindCalls += 1
+            bindMethods += method
+            events += "bind:$method"
+            val gate = bindGate
+            bindGate = null
+            gate?.await()
+            if (bindFailures > 0) {
+                bindFailures -= 1
+                error("bind failed")
+            }
         }
 
         override suspend fun readCachedPlans(device: ResolvedDevice) = cachedPlans
@@ -509,8 +677,11 @@ class ConfirmControllerTest {
     private class FakeWaterSource(
         private val msgReady: Boolean,
         private val unlockFails: Boolean,
+        private val events: MutableList<String> = mutableListOf(),
     ) : WaterDataSource {
         var unlockCalls = 0
+        var msgSyncCalls = 0
+        var readyAfterCalls = if (msgReady) 1 else Int.MAX_VALUE
 
         override suspend fun unlock(
             detail: GoodsDetail,
@@ -521,14 +692,19 @@ class ConfirmControllerTest {
             iotBOrderNo: String,
         ): Unlock {
             unlockCalls += 1
+            events += "unlock"
             if (unlockFails) error("unlock failed")
             return Unlock(orderNo = "order-1", msgId = "msg-1")
         }
 
-        override suspend fun msgSync(msgId: String) = MsgSyncBean(
-            state = if (msgReady) "OK" else "WAIT",
-            code = if (msgReady) "05" else "",
-        )
+        override suspend fun msgSync(msgId: String): MsgSyncBean {
+            msgSyncCalls += 1
+            val ready = msgReady && msgSyncCalls >= readyAfterCalls
+            return MsgSyncBean(
+                state = if (ready) "OK" else "WAIT",
+                code = if (ready) "05" else "",
+            )
+        }
 
         override fun isDeviceReady(bean: MsgSyncBean) =
             bean.state.equals("OK", ignoreCase = true) || bean.code == "05"
@@ -581,10 +757,16 @@ class ConfirmControllerTest {
     private class FakeConfigSource : DeviceConfigSource {
         var existing: ConfirmedDevice? = null
         var saved: ConfirmedDevice? = null
+        var saveGate: CompletableDeferred<Unit>? = null
+        var saveFails = false
 
         override suspend fun find(goodsId: String) = existing
 
         override suspend fun save(device: ConfirmedDevice) {
+            val gate = saveGate
+            saveGate = null
+            gate?.await()
+            if (saveFails) error("save failed")
             saved = device
         }
     }
