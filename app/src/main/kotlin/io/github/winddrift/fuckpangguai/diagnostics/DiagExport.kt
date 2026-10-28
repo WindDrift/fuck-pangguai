@@ -27,6 +27,7 @@ data class DiagExportInput(
     val crashes: List<CrashEntry>,
     val stats: TraceStats,
     val filterDescription: String = "",
+    val filteredStats: TraceStats? = null,
 )
 
 object DiagExport {
@@ -75,6 +76,7 @@ object DiagExport {
                 crashes = input.crashes.size,
             ),
             stats = input.stats,
+            filteredStats = input.filteredStats,
             events = input.events,
             traces = input.traces,
             crashes = input.crashes,
@@ -100,6 +102,11 @@ object DiagExport {
         )
         appendLine()
         appendStats(input.stats)
+        if (input.filteredStats != null) {
+            appendLine()
+            appendLine("== 当前筛选统计 ==")
+            appendStats(input.filteredStats)
+        }
         appendLine()
         appendLine("== 接水全链路 ==")
         if (input.traces.isEmpty()) {
@@ -237,6 +244,7 @@ object DiagExport {
         val filter: String,
         val counts: Counts,
         val stats: TraceStats,
+        val filteredStats: TraceStats? = null,
         val events: List<DiagEvent>,
         val traces: List<WaterTrace>,
         val crashes: List<CrashEntry>,

@@ -51,6 +51,7 @@ import io.github.winddrift.fuckpangguai.confirm.ConfirmScreen
 import io.github.winddrift.fuckpangguai.confirm.ConfirmState
 import io.github.winddrift.fuckpangguai.confirm.LocationPhase
 import io.github.winddrift.fuckpangguai.debug.DebugScreen
+import io.github.winddrift.fuckpangguai.diagnostics.DiagnosticsController
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import io.github.winddrift.fuckpangguai.history.HistoryController
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
@@ -112,6 +113,7 @@ fun PangguaiRoot(
     historyRepository: HistoryRepository,
     historyController: HistoryController,
     settingsStore: AppSettingsStore,
+    diagnosticsController: DiagnosticsController,
     assetController: AssetController,
     pointsController: PointsController,
     ticketRechargeController: TicketRechargeController,
@@ -617,6 +619,7 @@ fun PangguaiRoot(
                         RootDestination.Debug -> DebugScreen(
                             settingsStore = settingsStore,
                             scanController = scanController,
+                            diagnosticsController = diagnosticsController,
                             onImportToken = controller::importToken,
                             scrollBehavior = debugScrollBehavior,
                         )

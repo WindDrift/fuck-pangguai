@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
                     historyRepository = graph.historyRepository,
                     historyController = graph.historyController,
                     settingsStore = graph.settingsStore,
+                    diagnosticsController = graph.diagnosticsController,
                     assetController = graph.assetController,
                     pointsController = graph.pointsController,
                     ticketRechargeController = graph.ticketRechargeController,

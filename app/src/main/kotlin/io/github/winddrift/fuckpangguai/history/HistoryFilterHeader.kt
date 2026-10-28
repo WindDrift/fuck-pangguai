@@ -119,34 +119,6 @@ internal fun HistoryFilterHeader(
 }
 
 @Composable
-internal fun HistoryChoiceChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = MiuixTheme.colorScheme
-    MinimumTouchTarget(
-        onClick = onClick,
-        role = Role.RadioButton,
-        selected = selected,
-    ) {
-        Card(
-            insideMargin = PaddingValues(0.dp),
-            colors = CardDefaults.defaultColors(
-                color = if (selected) colors.primaryContainer else colors.surfaceContainer,
-                contentColor = if (selected) colors.onPrimaryContainer else colors.onSurface,
-            ),
-        ) {
-            Text(
-                text = label,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                style = MiuixTheme.textStyles.footnote1,
-            )
-        }
-    }
-}
-
-@Composable
 private fun FilterChip(
     label: String,
     onClick: () -> Unit,

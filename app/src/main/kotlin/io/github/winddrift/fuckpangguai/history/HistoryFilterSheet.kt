@@ -41,6 +41,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.winddrift.fuckpangguai.ui.components.ChoiceChip
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
 
 @Composable
@@ -279,7 +280,7 @@ private fun TimeFilterSection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             items(HistoryTimePreset.entries) { preset ->
-                HistoryChoiceChip(
+                ChoiceChip(
                     label = preset.label(),
                     selected = filter.timePreset == preset,
                     onClick = {
@@ -383,7 +384,7 @@ private fun TicketFilterSection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             items(TicketUsage.entries) { usage ->
-                HistoryChoiceChip(
+                ChoiceChip(
                     label = usage.label(),
                     selected = filter.ticketUsage == usage,
                     onClick = {

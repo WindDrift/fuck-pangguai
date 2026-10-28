@@ -72,6 +72,13 @@ class AppGraph(context: Context) {
         previewLimit = if (BuildConfig.DIAGNOSTIC_LOGGING) 16 * 1024 else 4 * 1024,
     )
 
+    val diagnosticsController = io.github.winddrift.fuckpangguai.diagnostics.DiagnosticsController(
+        context = appContext,
+        diagnostics = diagnostics,
+        settingsStore = diagSettingsStore,
+        scope = scope,
+    )
+
     val accountStore = AccountStore(appContext)
     val assetSnapshotStore = AssetSnapshotStore(appContext)
     private val pendingRechargeStore = DataStorePendingRechargeStore(appContext)
