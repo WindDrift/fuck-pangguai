@@ -530,7 +530,10 @@ fun PangguaiRoot(
                     label = "rootContent",
                 ) { dest ->
                     when (dest) {
-                        is RootDestination.Using -> UsingScreen(session = dest.session)
+                        is RootDestination.Using -> UsingScreen(
+                            session = dest.session,
+                            waterConversion = waterConversion,
+                        )
 
                         RootDestination.Loading -> LoadingScreen()
 

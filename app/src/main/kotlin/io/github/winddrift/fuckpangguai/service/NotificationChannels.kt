@@ -12,7 +12,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.github.winddrift.fuckpangguai.R
 import io.github.winddrift.fuckpangguai.water.SessionPhase
+import io.github.winddrift.fuckpangguai.water.WaterConversion
 import io.github.winddrift.fuckpangguai.water.WaterSession
+import io.github.winddrift.fuckpangguai.water.formatAmountWithWater
 
 object NotificationChannels {
     const val WATER_SESSION = "water_session"
@@ -35,6 +37,7 @@ object NotificationChannels {
         context: Context,
         session: WaterSession?,
         terminal: Boolean = false,
+        conversion: WaterConversion? = null,
     ): android.app.Notification {
         val title = when (session?.phase) {
             SessionPhase.SETTLING -> "正在结算"
@@ -46,9 +49,9 @@ object NotificationChannels {
         }
         val text = buildString {
             session?.deviceName?.takeIf { it.isNotBlank() }?.let { append(it) }
-            session?.amount?.takeIf { it.isNotBlank() }?.let {
+            session?.amount?.takeIf { it.isNotBlank() }?.let { amount ->
                 if (isNotEmpty()) append(" · ")
-                append("用量 ").append(it)
+                append("用量 ").append(formatAmountWithWater(amount, conversion))
             }
             if (isEmpty()) append("保持前台服务，等待设备结算")
         }
@@ -62,6 +65,7 @@ object NotificationChannels {
             .setSmallIcon(R.drawable.ic_water_drop)
             .setContentTitle(title)
             .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setOngoing(!terminal)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
@@ -69,7 +73,12 @@ object NotificationChannels {
     }
 
     @SuppressLint("MissingPermission")
-    fun notify(context: Context, session: WaterSession?, terminal: Boolean = false) {
+    fun notify(
+        context: Context,
+        session: WaterSession?,
+        terminal: Boolean = false,
+        conversion: WaterConversion? = null,
+    ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
@@ -79,7 +88,10 @@ object NotificationChannels {
         val manager = NotificationManagerCompat.from(context)
         if (manager.areNotificationsEnabled()) {
             runCatching {
-                manager.notify(SESSION_NOTIFICATION_ID, build(context, session, terminal))
+                manager.notify(
+                    SESSION_NOTIFICATION_ID,
+                    build(context, session, terminal = terminal, conversion = conversion),
+                )
             }
         }
     }

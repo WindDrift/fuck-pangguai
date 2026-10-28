@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,15 +36,23 @@ import io.github.winddrift.fuckpangguai.ui.components.SectionCard
 import io.github.winddrift.fuckpangguai.ui.components.SessionTimeline
 import io.github.winddrift.fuckpangguai.ui.format.sessionStatusLabel
 import io.github.winddrift.fuckpangguai.water.SessionPhase
+import io.github.winddrift.fuckpangguai.water.WaterConversion
 import io.github.winddrift.fuckpangguai.water.WaterSession
+import io.github.winddrift.fuckpangguai.water.formatConvertedWater
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun UsingScreen(session: WaterSession) {
+fun UsingScreen(
+    session: WaterSession,
+    waterConversion: WaterConversion? = null,
+) {
     val context = LocalContext.current
     val colors = MiuixTheme.colorScheme
     val terminal = session.phase in SessionPhase.TERMINAL
+    val waterDetail = remember(session.amount, waterConversion) {
+        formatConvertedWater(session.amount, waterConversion)
+    }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { }
@@ -86,6 +95,13 @@ fun UsingScreen(session: WaterSession) {
                 style = MiuixTheme.textStyles.title1,
                 color = colors.primary,
             )
+            if (waterDetail != null) {
+                Text(
+                    text = waterDetail,
+                    style = MiuixTheme.textStyles.body1,
+                    color = colors.onSurfaceSecondary,
+                )
+            }
             AnimatedContent(
                 targetState = sessionStatusLabel(session.phase),
                 transitionSpec = {

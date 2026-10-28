@@ -13,6 +13,7 @@ import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import io.github.winddrift.fuckpangguai.net.userMessage
 import io.github.winddrift.fuckpangguai.water.SessionPhase
 import io.github.winddrift.fuckpangguai.water.SettlementDecider
+import io.github.winddrift.fuckpangguai.water.WaterConversion
 import io.github.winddrift.fuckpangguai.water.WaterRepository
 import io.github.winddrift.fuckpangguai.water.WaterSession
 import io.github.winddrift.fuckpangguai.water.WaterSessionStore
@@ -40,6 +41,9 @@ class WaterSyncService : Service() {
     private var current: WaterSession? = null
 
     @Volatile
+    private var waterConversion: WaterConversion? = null
+
+    @Volatile
     private var endRequested = false
 
     private var endSent = false
@@ -51,6 +55,9 @@ class WaterSyncService : Service() {
         repository = graph.waterRepository
         historyRepository = graph.historyRepository
         NotificationChannels.ensure(this)
+        scope.launch {
+            graph.settingsStore.waterConversion.collect { waterConversion = it }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -111,7 +118,12 @@ class WaterSyncService : Service() {
             scope.launch {
                 store.save(updated)
                 historyRepository.save(updated)
-                NotificationChannels.notify(this@WaterSyncService, updated, terminal = true)
+                NotificationChannels.notify(
+                    this@WaterSyncService,
+                    updated,
+                    terminal = true,
+                    conversion = waterConversion,
+                )
             }
         }
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
@@ -291,6 +303,7 @@ class WaterSyncService : Service() {
             this,
             session,
             terminal = session.phase in SessionPhase.TERMINAL,
+            conversion = waterConversion,
         )
     }
 
@@ -299,7 +312,12 @@ class WaterSyncService : Service() {
         scope.launch {
             store.save(session)
             historyRepository.save(session)
-            NotificationChannels.notify(this@WaterSyncService, session, terminal = true)
+            NotificationChannels.notify(
+                this@WaterSyncService,
+                session,
+                terminal = true,
+                conversion = waterConversion,
+            )
             ServiceCompat.stopForeground(this@WaterSyncService, ServiceCompat.STOP_FOREGROUND_DETACH)
             stopSelf()
         }
@@ -312,7 +330,11 @@ class WaterSyncService : Service() {
     }
 
     private fun startForegroundCompat(session: WaterSession?) {
-        val notification = NotificationChannels.build(this, session)
+        val notification = NotificationChannels.build(
+            this,
+            session,
+            conversion = waterConversion,
+        )
         ServiceCompat.startForeground(
             this,
             NotificationChannels.SESSION_NOTIFICATION_ID,
