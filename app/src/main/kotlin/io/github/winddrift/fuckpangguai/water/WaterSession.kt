@@ -22,6 +22,13 @@ data class WaterSession(
     val error: String = "",
     val updatedAt: Long = startedAt,
     val accountId: String = "",
+    val traceId: String = "",
+    val waterConfirmedAt: Long = 0L,
+    val endRequestedAt: Long = 0L,
+    val endedAt: Long = 0L,
+    val syncCount: Int = 0,
+    val settleStartedAt: Long = 0L,
+    val payPollAttempts: Int = 0,
 )
 
 object SessionPhase {
