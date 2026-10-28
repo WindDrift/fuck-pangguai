@@ -153,6 +153,7 @@ class AppGraph(context: Context) {
         scope = scope,
         source = GithubReleaseSource(),
         currentVersion = BuildConfig.VERSION_NAME,
+        diagnostics = diagnostics,
     )
     val assetRepository = AssetRepository(
         api = api,
@@ -170,6 +171,7 @@ class AppGraph(context: Context) {
         scope = scope,
         historyRepository = historyRepository,
         billRepository = BillRepository(api),
+        diagnostics = diagnostics,
     )
     val ticketRechargeController = TicketRechargeController(
         scope = scope,
@@ -177,6 +179,7 @@ class AppGraph(context: Context) {
         pendingStore = pendingRechargeStore,
         accountSource = AccountStoreTicketSource(accountStore),
         onPaid = assetController::refresh,
+        diagnostics = diagnostics,
     )
 
     val pointsController = PointsController(
@@ -189,6 +192,7 @@ class AppGraph(context: Context) {
             NotificationManagerCompat.from(appContext).areNotificationsEnabled()
         },
         onPointsChanged = assetController::refresh,
+        diagnostics = diagnostics,
     )
     val deviceConfigStore = DeviceConfigStore(appContext)
     val waterSessionStore = WaterSessionStore(appContext)

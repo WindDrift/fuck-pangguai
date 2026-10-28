@@ -1,5 +1,9 @@
 package io.github.winddrift.fuckpangguai.ticket
 
+import io.github.winddrift.fuckpangguai.diagnostics.DiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.NoopDiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
 import io.github.winddrift.fuckpangguai.net.userMessage
 import io.github.winddrift.fuckpangguai.net.dto.PayChannel
 import io.github.winddrift.fuckpangguai.net.dto.TicketGoods
@@ -82,6 +86,7 @@ class TicketRechargeController(
     private val now: () -> Long = System::currentTimeMillis,
     private val statusPollIntervalMs: Long = 1_000L,
     private val slowPollIntervalMs: Long = 2_000L,
+    private val diagnostics: DiagSink = NoopDiagSink,
 ) {
     private val _state = MutableStateFlow(TicketRechargeState())
     val state = _state.asStateFlow()
@@ -718,6 +723,7 @@ class TicketRechargeController(
         paidNotified = true
         runCatchingSuspend { pendingStore.clear(localId) }
         if (!isCurrent(gen, localId)) return
+        val current = _state.value
         _state.update {
             it.copy(
                 stage = RechargeStage.Paid,
@@ -726,6 +732,16 @@ class TicketRechargeController(
                 message = null,
             )
         }
+        diagnostics.event(
+            DiagLevel.Info,
+            DiagFlow.Ticket,
+            "recharge_paid",
+            fields = mapOf(
+                "shopId" to current.shopId,
+                "orderNo" to current.orderNo,
+                "points" to current.points.toString(),
+            ),
+        )
         onPaid()
     }
 
@@ -741,6 +757,16 @@ class TicketRechargeController(
         _state.update {
             it.copy(stage = stage, pending = null, message = message)
         }
+        diagnostics.event(
+            if (stage == RechargeStage.Paid) DiagLevel.Info else DiagLevel.Warn,
+            DiagFlow.Ticket,
+            "recharge_finished",
+            message = message.orEmpty().take(512),
+            fields = mapOf(
+                "stage" to stage.name,
+                "orderNo" to _state.value.orderNo,
+            ),
+        )
     }
 
     private suspend fun clearPendingForBanner(gen: Int, localId: String, message: String) {

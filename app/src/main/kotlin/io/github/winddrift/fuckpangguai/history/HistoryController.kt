@@ -1,5 +1,9 @@
 package io.github.winddrift.fuckpangguai.history
 
+import io.github.winddrift.fuckpangguai.diagnostics.DiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.NoopDiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
 import io.github.winddrift.fuckpangguai.net.dto.BillOrderDto
 import io.github.winddrift.fuckpangguai.net.dto.TicketLog
 import io.github.winddrift.fuckpangguai.net.userMessage
@@ -32,6 +36,7 @@ class HistoryController(
     private val scope: CoroutineScope,
     private val historyRepository: HistoryRepository,
     private val billRepository: BillRepository,
+    private val diagnostics: DiagSink = NoopDiagSink,
 ) {
     private val _state = MutableStateFlow(HistoryUiState())
     val state = _state.asStateFlow()
@@ -72,10 +77,26 @@ class HistoryController(
                         it.copy(loading = false, error = throwable.userMessage())
                     }
                 }
+                diagnostics.event(
+                    DiagLevel.Warn,
+                    DiagFlow.History,
+                    "history_load_fail",
+                    message = throwable.userMessage(),
+                    fields = mapOf("accountId" to accountId),
+                )
                 return@launch
             }
             if (currentGeneration != generation || _state.value.accountId != accountId) return@launch
             _state.update { it.copy(records = records, loading = false) }
+            diagnostics.event(
+                DiagLevel.Debug,
+                DiagFlow.History,
+                "history_loaded",
+                fields = mapOf(
+                    "accountId" to accountId,
+                    "count" to records.size.toString(),
+                ),
+            )
             syncBills(records, accountId, includeOld, currentGeneration)
         }
     }

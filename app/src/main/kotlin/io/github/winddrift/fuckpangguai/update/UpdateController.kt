@@ -1,5 +1,9 @@
 package io.github.winddrift.fuckpangguai.update
 
+import io.github.winddrift.fuckpangguai.diagnostics.DiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.NoopDiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -12,6 +16,7 @@ class UpdateController internal constructor(
     private val scope: CoroutineScope,
     private val source: ReleaseSource,
     private val currentVersion: String,
+    private val diagnostics: DiagSink = NoopDiagSink,
 ) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
@@ -42,11 +47,22 @@ class UpdateController internal constructor(
             _state.value = UpdateState.Checking
             try {
                 val result = evaluate(source.latest())
-                _state.value = if (silent && result is UpdateState.Failed) {
+                val next = if (silent && result is UpdateState.Failed) {
                     previous.takeIf { it is UpdateState.Available } ?: UpdateState.Idle
                 } else {
                     result
                 }
+                _state.value = next
+                diagnostics.event(
+                    DiagLevel.Debug,
+                    DiagFlow.Update,
+                    "update_check",
+                    fields = mapOf(
+                        "result" to next.javaClass.simpleName,
+                        "silent" to silent.toString(),
+                        "current" to currentVersion,
+                    ),
+                )
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (throwable: Throwable) {
@@ -55,6 +71,13 @@ class UpdateController internal constructor(
                 } else {
                     UpdateState.Failed(throwable.toUpdateError())
                 }
+                diagnostics.event(
+                    DiagLevel.Warn,
+                    DiagFlow.Update,
+                    "update_check_fail",
+                    message = throwable.message.orEmpty(),
+                    fields = mapOf("silent" to silent.toString()),
+                )
             }
         }
     }

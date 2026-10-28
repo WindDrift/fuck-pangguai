@@ -1,5 +1,9 @@
 package io.github.winddrift.fuckpangguai.points
 
+import io.github.winddrift.fuckpangguai.diagnostics.DiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.NoopDiagSink
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagFlow
+import io.github.winddrift.fuckpangguai.diagnostics.model.DiagLevel
 import io.github.winddrift.fuckpangguai.net.ApiException
 import io.github.winddrift.fuckpangguai.net.dto.IntegralTaskDto
 import io.github.winddrift.fuckpangguai.net.dto.SubtaskDto
@@ -35,6 +39,7 @@ class PointsController(
     private val jitterRange: LongRange = 1_500L..3_000L,
     private val browseRange: LongRange = 3_000L..8_000L,
     private val random: Random = Random.Default,
+    private val diagnostics: DiagSink = NoopDiagSink,
 ) {
     private val _state = MutableStateFlow(PointsUiState())
     val state = _state.asStateFlow()
@@ -558,6 +563,17 @@ class PointsController(
                 logs = snapshot?.lastRun?.logs ?: it.logs,
             )
         }
+        diagnostics.event(
+            if (error == null) DiagLevel.Debug else DiagLevel.Warn,
+            DiagFlow.Points,
+            "points_refresh",
+            message = error.orEmpty(),
+            fields = mapOf(
+                "accountId" to accountId,
+                "tasks" to tasks?.size.toString(),
+                "integral" to integral,
+            ),
+        )
     }
 
     private fun refreshPage(accountId: String) {
