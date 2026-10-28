@@ -30,6 +30,11 @@ data class HistoryRecord(
     val billFetchedAt: Long,
 )
 
+internal data class HistoryImportCounts(
+    val inserted: Int,
+    val duplicates: Int,
+)
+
 class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -116,6 +121,55 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
             return existingId
         }
         return writableDatabase.insertOrThrow(TABLE, null, values)
+    }
+
+    internal fun insertImported(
+        accountId: String,
+        rows: List<ImportHistoryRow>,
+    ): HistoryImportCounts {
+        if (accountId.isBlank() || rows.isEmpty()) return HistoryImportCounts(0, 0)
+        var inserted = 0
+        var duplicates = 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            rows.forEach { row ->
+                val values = ContentValues().apply {
+                    put("account_id", accountId)
+                    put("goods_id", row.goodsId)
+                    put("device_name", row.deviceName)
+                    put("sku_id", row.skuId)
+                    put("amount", row.amount)
+                    put("order_no", row.orderNo)
+                    put("pay_order_no", row.payOrderNo)
+                    put("phase", row.phase)
+                    put("error", row.error)
+                    put("started_at", row.startedAt)
+                    put("updated_at", row.updatedAt)
+                }
+                val id = db.insertWithOnConflict(
+                    TABLE,
+                    null,
+                    values,
+                    SQLiteDatabase.CONFLICT_IGNORE,
+                )
+                if (id == -1L) duplicates++ else inserted++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return HistoryImportCounts(inserted = inserted, duplicates = duplicates)
+    }
+
+    fun count(accountId: String): Int {
+        if (accountId.isBlank()) return 0
+        return readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM $TABLE WHERE account_id = ?",
+            arrayOf(accountId),
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
     }
 
     fun list(accountId: String): List<HistoryRecord> {
@@ -262,6 +316,29 @@ class HistoryRepository(
     suspend fun list(): List<HistoryRecord> = withContext(Dispatchers.IO) {
         val accountId = accountStore.activeLocalId() ?: return@withContext emptyList()
         list(accountId)
+    }
+
+    suspend fun count(): Int = withContext(Dispatchers.IO) {
+        val accountId = accountStore.activeLocalId() ?: return@withContext 0
+        ensureBackfill(accountId)
+        db.count(accountId)
+    }
+
+    suspend fun importCsv(csv: String): HistoryImportResult = withContext(Dispatchers.IO) {
+        val accountId = accountStore.activeLocalId()
+            ?: return@withContext HistoryImportResult(formatError = true)
+        when (val parsed = parseHistoryCsv(csv)) {
+            HistoryCsvParseResult.InvalidFormat -> HistoryImportResult(formatError = true)
+            is HistoryCsvParseResult.Success -> {
+                ensureBackfill(accountId)
+                val counts = db.insertImported(accountId, parsed.rows)
+                HistoryImportResult(
+                    inserted = counts.inserted,
+                    duplicates = counts.duplicates,
+                    invalid = parsed.invalidRows,
+                )
+            }
+        }
     }
 
     suspend fun list(accountId: String): List<HistoryRecord> = withContext(Dispatchers.IO) {
