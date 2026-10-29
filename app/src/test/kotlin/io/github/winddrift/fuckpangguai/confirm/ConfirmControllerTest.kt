@@ -440,6 +440,42 @@ class ConfirmControllerTest {
     }
 
     @Test
+    fun `disabled saves confirmed device before publishing unlocked`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Disabled)
+        val gate = CompletableDeferred<Unit>()
+        deps.configSource.saveGate = gate
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+        assertTrue(controller.state.value is ConfirmState.Unlocking)
+        assertNull(deps.configSource.saved)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertNotNull(deps.configSource.saved)
+    }
+
+    @Test
+    fun `disabled save failure surfaces error like the legacy flow`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Disabled)
+        deps.configSource.saveFails = true
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Error)
+        assertNull(deps.configSource.saved)
+        assertEquals(1, deps.deviceSource.clearCalls)
+    }
+
+    @Test
     fun `aggressive polls faster during the fast window`() = runTest {
         val deps = Deps(acceleration = UnlockAcceleration.Aggressive)
         deps.waterSource.readyAfterCalls = 12

@@ -487,6 +487,9 @@ class ConfirmController(
                     throw ApiException(-1, "设备启动超时，请检查设备状态")
                 }
 
+                if (acceleration == UnlockAcceleration.Disabled) {
+                    persistConfirmed(ready)
+                }
                 val totalMs = clock() - clickedAt
                 val attempts = 1 + sync.polls + if (bindStats.skipped) 0 else 1
                 val unlockFields = buildMap {
@@ -553,7 +556,9 @@ class ConfirmController(
                         errorKind = null,
                     ),
                 )
-                persistConfirmedAsync(ready)
+                if (acceleration != UnlockAcceleration.Disabled) {
+                    persistConfirmedAsync(ready)
+                }
             } catch (exception: CancellationException) {
                 throw exception
             } catch (throwable: Throwable) {
@@ -661,18 +666,22 @@ class ConfirmController(
         }
     }
 
+    private suspend fun persistConfirmed(ready: ConfirmReady) {
+        configStore.save(
+            ConfirmedDevice(
+                goodsId = ready.device.scan.id,
+                skuId = ready.sku.skuId,
+                channelMethod = ready.channel.method,
+                deviceName = ready.device.detail.name,
+                updatedAt = clock(),
+            ),
+        )
+    }
+
     private fun persistConfirmedAsync(ready: ConfirmReady) {
         scope.launch {
             try {
-                configStore.save(
-                    ConfirmedDevice(
-                        goodsId = ready.device.scan.id,
-                        skuId = ready.sku.skuId,
-                        channelMethod = ready.channel.method,
-                        deviceName = ready.device.detail.name,
-                        updatedAt = clock(),
-                    ),
-                )
+                persistConfirmed(ready)
             } catch (exception: CancellationException) {
                 throw exception
             } catch (_: Throwable) {

@@ -14,7 +14,7 @@ enum class UnlockAcceleration(
 ) {
     Disabled(
         displayName = "不启用",
-        description = "恢复 1.13.1 之前的行为：点击时绑定通道，固定每秒轮询",
+        description = "恢复 1.13.1 之前的行为：点击时绑定通道，同步保存设备，固定每秒轮询",
     ),
     Conservative(
         displayName = "保守",
