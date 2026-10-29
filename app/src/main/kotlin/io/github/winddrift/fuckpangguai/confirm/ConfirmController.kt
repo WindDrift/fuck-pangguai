@@ -27,15 +27,19 @@ import io.github.winddrift.fuckpangguai.water.WaterDataSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 data class LocationSnapshot(
     val lat: String,
@@ -871,22 +875,18 @@ class ConfirmController(
         lng = String.format(Locale.US, "%.6f", point.longitude),
     )
 
-    private suspend fun waitForDevice(unlock: Unlock): SyncOutcome {
+    private suspend fun waitForDevice(unlock: Unlock): SyncOutcome = coroutineScope {
         if (unlock.msgId.isBlank()) {
             throw ApiException(-1, "解锁成功但未返回 msgId")
         }
         val startedAt = clock()
         var polls = 0
-        var deviceStartProbes = 0
-        val signal = withTimeoutOrNull(POLL_TIMEOUT_MS) {
-            while (true) {
-                polls += 1
-                val bean = waterRepository.msgSync(unlock.msgId)
-                if (waterRepository.isDeviceReady(bean)) {
-                    return@withTimeoutOrNull SyncSignal.MsgSync
-                }
-                if (acceleration == UnlockAcceleration.Insane && unlock.orderNo.isNotBlank()) {
-                    deviceStartProbes += 1
+        val probes = AtomicInteger(0)
+        val probeSignal = AtomicReference<SyncSignal?>(null)
+        val probeJob = if (acceleration == UnlockAcceleration.Insane && unlock.orderNo.isNotBlank()) {
+            launch {
+                while (isActive) {
+                    probes.incrementAndGet()
                     val started = try {
                         waterRepository.queryDeviceStarted(unlock.orderNo)
                     } catch (exception: CancellationException) {
@@ -895,20 +895,36 @@ class ConfirmController(
                         null
                     }
                     if (started == true) {
-                        return@withTimeoutOrNull SyncSignal.DeviceStart
+                        probeSignal.set(SyncSignal.DeviceStart)
+                        return@launch
                     }
+                    delay(INSANE_DEVICE_START_PROBE_INTERVAL_MS)
                 }
+            }
+        } else {
+            null
+        }
+        val signal = withTimeoutOrNull(POLL_TIMEOUT_MS) {
+            while (true) {
+                probeSignal.get()?.let { return@withTimeoutOrNull it }
+                polls += 1
+                val bean = waterRepository.msgSync(unlock.msgId)
+                if (waterRepository.isDeviceReady(bean)) {
+                    return@withTimeoutOrNull SyncSignal.MsgSync
+                }
+                probeSignal.get()?.let { return@withTimeoutOrNull it }
                 delay(pollIntervalMs(polls))
             }
             @Suppress("UNREACHABLE_CODE")
             null
         }
-        return SyncOutcome(
+        probeJob?.cancel()
+        SyncOutcome(
             ready = signal != null,
             polls = polls,
             durationMs = (clock() - startedAt).coerceAtLeast(0L),
             source = signal?.label.orEmpty(),
-            deviceStartProbes = deviceStartProbes,
+            deviceStartProbes = probes.get(),
         )
     }
 
@@ -1028,6 +1044,7 @@ class ConfirmController(
         const val INSANE_FAST_POLL_COUNT = 61
         const val INSANE_FAST_POLL_INTERVAL_MS = 50L
         const val INSANE_SLOW_POLL_INTERVAL_MS = 100L
+        const val INSANE_DEVICE_START_PROBE_INTERVAL_MS = 250L
 
         /** 官方 1.143.1 的固定重试间隔；不启用档位恢复该行为。 */
         const val SLOW_POLL_INTERVAL_MS = 1_000L

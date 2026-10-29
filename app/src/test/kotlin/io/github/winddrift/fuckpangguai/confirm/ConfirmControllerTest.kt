@@ -556,6 +556,24 @@ class ConfirmControllerTest {
     }
 
     @Test
+    fun `insane keeps msg sync cadence while device start probe is slow`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Insane)
+        val gate = CompletableDeferred<Unit>()
+        deps.waterSource.deviceStartGate = gate
+        deps.waterSource.readyAfterCalls = 2
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(2, deps.waterSource.msgSyncCalls)
+        assertEquals(50L, testScheduler.currentTime)
+        assertEquals("msgSync", deps.timingSink.entries.single().syncSource)
+    }
+
+    @Test
     fun `insane falls back to msg sync when device start probe fails`() = runTest {
         val deps = Deps(acceleration = UnlockAcceleration.Insane)
         deps.waterSource.deviceStartFails = true
@@ -875,6 +893,7 @@ class ConfirmControllerTest {
         var msgSyncCalls = 0
         var deviceStartCalls = 0
         var deviceStartFails = false
+        var deviceStartGate: CompletableDeferred<Unit>? = null
         var startedAfterCalls = Int.MAX_VALUE
         var readyAfterCalls = if (msgReady) 1 else Int.MAX_VALUE
 
@@ -906,6 +925,9 @@ class ConfirmControllerTest {
 
         override suspend fun queryDeviceStarted(orderNo: String): Boolean? {
             deviceStartCalls += 1
+            val gate = deviceStartGate
+            deviceStartGate = null
+            gate?.await()
             if (deviceStartFails) error("device start probe failed")
             return deviceStartCalls >= startedAfterCalls
         }
