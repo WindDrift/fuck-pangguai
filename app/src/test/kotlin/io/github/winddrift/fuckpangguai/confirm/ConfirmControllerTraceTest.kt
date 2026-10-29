@@ -214,6 +214,8 @@ class ConfirmControllerTraceTest {
         override fun isDeviceReady(bean: MsgSyncBean): Boolean =
             bean.state.equals("OK", ignoreCase = true) || bean.code == "05"
 
+        override suspend fun queryDeviceStarted(orderNo: String): Boolean = false
+
         override suspend fun waterSync(skuId: String) = WaterSync()
 
         override suspend fun endWater(goodsId: String) = Unit
@@ -232,6 +234,8 @@ class ConfirmControllerTraceTest {
     private class FakeSettings(private val dryRun: Boolean) : SettingsSource {
         override suspend fun isOneTapEnabled(): Boolean = false
         override suspend fun isDryRun(): Boolean = dryRun
+        override suspend fun getUnlockAcceleration(): UnlockAcceleration =
+            UnlockAcceleration.Conservative
     }
 
     private class FakeConfig : DeviceConfigSource {

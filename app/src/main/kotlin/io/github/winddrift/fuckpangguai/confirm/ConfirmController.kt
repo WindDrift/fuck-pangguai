@@ -120,6 +120,9 @@ class ConfirmController(
     private var boundChannel: Int? = null
     private var boundByPrebind = false
     private var prebindAttempted = false
+    private var prebindInFlightMethod: Int? = null
+    private var prebindSkippedByClick = false
+    private var acceleration = UnlockAcceleration.Conservative
     private var traceId = ""
     private var unlockSucceeded = false
     private var abandonPending = false
@@ -132,6 +135,9 @@ class ConfirmController(
         boundChannel = null
         boundByPrebind = false
         prebindAttempted = false
+        prebindInFlightMethod = null
+        prebindSkippedByClick = false
+        acceleration = UnlockAcceleration.Conservative
         locationSnapshot = null
         locationPhase = LocationPhase.Fetching
         loadJob?.cancel()
@@ -455,6 +461,7 @@ class ConfirmController(
                 "skuId" to ready.sku.skuId,
                 "channel" to ready.channel.methodName,
                 "oneTap" to ready.oneTap.toString(),
+                "acceleration" to acceleration.name,
             ),
         )
         _state.value = ConfirmState.Unlocking
@@ -485,12 +492,15 @@ class ConfirmController(
                 val unlockFields = buildMap {
                     put("channel", ready.channel.methodName)
                     put("channelMethod", ready.channel.method.toString())
+                    put("acceleration", acceleration.name)
                     put("bindSkipped", bindStats.skipped.toString())
                     put("prebound", bindStats.prebound.toString())
                     put("bindWaitMs", bindStats.waitMs.toString())
                     put("bindCallMs", bindStats.callMs.toString())
                     put("unlockCallMs", unlockCallMs.toString())
                     put("syncPolls", sync.polls.toString())
+                    put("syncSource", sync.source)
+                    put("deviceStartProbes", sync.deviceStartProbes.toString())
                     put("syncDurationMs", sync.durationMs.toString())
                     put("totalMs", totalMs.toString())
                 }
@@ -557,8 +567,10 @@ class ConfirmController(
                     error = throwable.userMessage(),
                     fields = mapOf(
                         "channel" to ready.channel.methodName,
+                        "acceleration" to acceleration.name,
                         "unlockCallMs" to unlockCallMs.toString(),
                         "syncPolls" to sync.polls.toString(),
+                        "syncSource" to sync.source,
                         "errorKind" to errorKind(throwable),
                     ),
                 )
@@ -604,8 +616,26 @@ class ConfirmController(
 
     private suspend fun ensureBound(method: Int): BindStats {
         val waitStartedAt = clock()
+        if (acceleration != UnlockAcceleration.Disabled && boundChannel == method) {
+            return BindStats(
+                skipped = true,
+                prebound = boundByPrebind,
+                waitMs = (clock() - waitStartedAt).coerceAtLeast(0L),
+            )
+        }
+        if (acceleration != UnlockAcceleration.Disabled &&
+            acceleration != UnlockAcceleration.Conservative &&
+            prebindInFlightMethod == method
+        ) {
+            prebindSkippedByClick = true
+            return BindStats(
+                skipped = true,
+                prebound = true,
+                waitMs = (clock() - waitStartedAt).coerceAtLeast(0L),
+            )
+        }
         return bindMutex.withLock {
-            if (boundChannel == method) {
+            if (acceleration != UnlockAcceleration.Disabled && boundChannel == method) {
                 return@withLock BindStats(
                     skipped = true,
                     prebound = boundByPrebind,
@@ -694,8 +724,11 @@ class ConfirmController(
 
         val oneTap = settingsStore.isOneTapEnabled()
         val dryRun = settingsStore.isDryRun()
+        val accelerationTier = settingsStore.getUnlockAcceleration()
         val confirmed = configStore.find(device.scan.id)
         if (gen != generation) return false
+
+        acceleration = accelerationTier
 
         val skuIndex = confirmed?.skuId
             ?.let { id -> skus.indexOfFirst { it.skuId == id } }
@@ -731,6 +764,7 @@ class ConfirmController(
                 "locationPhase" to locationPhase.name,
                 "oneTap" to oneTap.toString(),
                 "dryRun" to dryRun.toString(),
+                "acceleration" to accelerationTier.name,
             ),
         )
         diagnostics.event(
@@ -744,6 +778,7 @@ class ConfirmController(
                 "skuId" to ready.sku.skuId,
                 "channel" to ready.channel.methodName,
                 "locationPhase" to locationPhase.name,
+                "acceleration" to accelerationTier.name,
             ),
         )
         launchPrebind(ready, gen)
@@ -752,11 +787,13 @@ class ConfirmController(
     }
 
     private fun launchPrebind(ready: ConfirmReady, gen: Int) {
-        if (!PREBIND_ENABLED || ready.dryRun || prebindAttempted) return
+        if (acceleration == UnlockAcceleration.Disabled || ready.dryRun || prebindAttempted) return
         prebindAttempted = true
         val method = ready.channel.method
         scope.launch {
+            var failed = false
             try {
+                prebindInFlightMethod = method
                 bindMutex.withLock {
                     if (gen != generation || boundChannel == method) return@withLock
                     deviceRepository.bindChannel(method)
@@ -768,7 +805,31 @@ class ConfirmController(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (_: Throwable) {
-                // 预绑定失败静默，点击解锁时会重试。
+                failed = true
+                // 预绑定失败静默，点击解锁时会重试；点击时若已跳过等待，这里补一次。
+            } finally {
+                if (prebindInFlightMethod == method) {
+                    prebindInFlightMethod = null
+                }
+            }
+            if (failed && prebindSkippedByClick && gen == generation) {
+                retryPrebind(method, gen)
+            }
+        }
+    }
+
+    private fun retryPrebind(method: Int, gen: Int) {
+        scope.launch {
+            try {
+                bindMutex.withLock {
+                    if (gen != generation || boundChannel == method) return@withLock
+                    deviceRepository.bindChannel(method)
+                    boundChannel = method
+                    boundByPrebind = true
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Throwable) {
             }
         }
     }
@@ -807,26 +868,63 @@ class ConfirmController(
         }
         val startedAt = clock()
         var polls = 0
-        val ready = withTimeoutOrNull(POLL_TIMEOUT_MS) {
+        var deviceStartProbes = 0
+        val signal = withTimeoutOrNull(POLL_TIMEOUT_MS) {
             while (true) {
                 polls += 1
                 val bean = waterRepository.msgSync(unlock.msgId)
-                if (waterRepository.isDeviceReady(bean)) return@withTimeoutOrNull true
-                val interval = if (polls < FAST_POLL_COUNT) {
-                    FAST_POLL_INTERVAL_MS
-                } else {
-                    SLOW_POLL_INTERVAL_MS
+                if (waterRepository.isDeviceReady(bean)) {
+                    return@withTimeoutOrNull SyncSignal.MsgSync
                 }
-                delay(interval)
+                if (acceleration == UnlockAcceleration.Insane && unlock.orderNo.isNotBlank()) {
+                    deviceStartProbes += 1
+                    val started = try {
+                        waterRepository.queryDeviceStarted(unlock.orderNo)
+                    } catch (exception: CancellationException) {
+                        throw exception
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (started == true) {
+                        return@withTimeoutOrNull SyncSignal.DeviceStart
+                    }
+                }
+                delay(pollIntervalMs(polls))
             }
             @Suppress("UNREACHABLE_CODE")
-            false
-        } ?: false
+            null
+        }
         return SyncOutcome(
-            ready = ready,
+            ready = signal != null,
             polls = polls,
             durationMs = (clock() - startedAt).coerceAtLeast(0L),
+            source = signal?.label.orEmpty(),
+            deviceStartProbes = deviceStartProbes,
         )
+    }
+
+    private fun pollIntervalMs(polls: Int): Long = when (acceleration) {
+        UnlockAcceleration.Disabled -> SLOW_POLL_INTERVAL_MS
+        UnlockAcceleration.Conservative ->
+            if (polls < CONSERVATIVE_FAST_POLL_COUNT) {
+                CONSERVATIVE_FAST_POLL_INTERVAL_MS
+            } else {
+                SLOW_POLL_INTERVAL_MS
+            }
+
+        UnlockAcceleration.Aggressive ->
+            if (polls < AGGRESSIVE_FAST_POLL_COUNT) {
+                AGGRESSIVE_FAST_POLL_INTERVAL_MS
+            } else {
+                AGGRESSIVE_SLOW_POLL_INTERVAL_MS
+            }
+
+        UnlockAcceleration.Insane ->
+            if (polls < INSANE_FAST_POLL_COUNT) {
+                INSANE_FAST_POLL_INTERVAL_MS
+            } else {
+                INSANE_SLOW_POLL_INTERVAL_MS
+            }
     }
 
     private fun buildTiming(
@@ -840,6 +938,7 @@ class ConfirmController(
     ): UnlockTiming = UnlockTiming(
         atMillis = clock(),
         outcome = outcome,
+        acceleration = acceleration,
         channelMethod = ready.channel.method,
         channelName = ready.channel.methodName,
         prebindAttempted = prebindAttempted,
@@ -850,6 +949,8 @@ class ConfirmController(
         unlockCallMs = unlockCallMs.coerceAtLeast(0L),
         syncPollCount = sync.polls,
         syncDurationMs = sync.durationMs,
+        syncSource = sync.source,
+        deviceStartProbes = sync.deviceStartProbes,
         totalMs = totalMs.coerceAtLeast(0L),
         errorKind = errorKind,
     )
@@ -880,7 +981,14 @@ class ConfirmController(
         val ready: Boolean,
         val polls: Int,
         val durationMs: Long,
+        val source: String = "",
+        val deviceStartProbes: Int = 0,
     )
+
+    private enum class SyncSignal(val label: String) {
+        MsgSync("msgSync"),
+        DeviceStart("deviceStart"),
+    }
 
     private fun deviceErrorMessage(code: String, serverMessage: String?): String = when (code) {
         "2" -> "设备工作中，请更换设备使用"
@@ -895,14 +1003,24 @@ class ConfirmController(
     }
 
     private companion object {
-        /** 回退开关：关闭后恢复“点击时才绑定通道”的旧行为。 */
-        const val PREBIND_ENABLED = true
         const val PLAN_REQUEST_ATTEMPTS = 2
         const val POLL_TIMEOUT_MS = 15_000L
 
-        /** 前 9 次请求覆盖约 2 秒（首轮立即，随后 8 个 250ms 间隔）。 */
-        const val FAST_POLL_COUNT = 9
-        const val FAST_POLL_INTERVAL_MS = 250L
+        /** 保守：前 9 次请求覆盖约 2 秒（首轮立即，随后 8 个 250ms 间隔）。 */
+        const val CONSERVATIVE_FAST_POLL_COUNT = 9
+        const val CONSERVATIVE_FAST_POLL_INTERVAL_MS = 250L
+
+        /** 激进：前 31 次请求覆盖约 3 秒，之后回落到 250ms。 */
+        const val AGGRESSIVE_FAST_POLL_COUNT = 31
+        const val AGGRESSIVE_FAST_POLL_INTERVAL_MS = 100L
+        const val AGGRESSIVE_SLOW_POLL_INTERVAL_MS = 250L
+
+        /** 丧心病狂：前 61 次请求覆盖约 3 秒，之后回落到 100ms。 */
+        const val INSANE_FAST_POLL_COUNT = 61
+        const val INSANE_FAST_POLL_INTERVAL_MS = 50L
+        const val INSANE_SLOW_POLL_INTERVAL_MS = 100L
+
+        /** 官方 1.143.1 的固定重试间隔；不启用档位恢复该行为。 */
         const val SLOW_POLL_INTERVAL_MS = 1_000L
     }
 }

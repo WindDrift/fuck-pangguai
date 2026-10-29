@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.winddrift.fuckpangguai.account.AssetController
 import io.github.winddrift.fuckpangguai.account.StoredAccount
+import io.github.winddrift.fuckpangguai.confirm.UnlockAcceleration
 import io.github.winddrift.fuckpangguai.history.HistoryRepository
 import io.github.winddrift.fuckpangguai.history.toCsv
 import io.github.winddrift.fuckpangguai.nfc.NfcAvailability
@@ -82,6 +83,8 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = false)
     val autoStartCamera by settingsStore.autoStartCamera
         .collectAsStateWithLifecycle(initialValue = true)
+    val unlockAcceleration by settingsStore.unlockAcceleration
+        .collectAsStateWithLifecycle(initialValue = UnlockAcceleration.Conservative)
     val waterConversion by settingsStore.waterConversion
         .collectAsStateWithLifecycle(initialValue = null)
     val assetState by assetController.state.collectAsStateWithLifecycle()
@@ -314,6 +317,18 @@ fun SettingsScreen(
                     },
                     title = "跳过设备信息",
                     summary = "识别成功后直接进入确认设备页，可配合一键解锁实现扫码即开",
+                )
+                PreferenceDivider()
+                OverlayDropdownPreference(
+                    items = UnlockAcceleration.entries.map { it.displayName },
+                    selectedIndex = unlockAcceleration.ordinal,
+                    title = "解锁加速",
+                    summary = unlockAcceleration.description,
+                    onSelectedIndexChange = { index ->
+                        scope.launch {
+                            settingsStore.setUnlockAcceleration(UnlockAcceleration.entries[index])
+                        }
+                    },
                 )
                 PreferenceDivider()
                 ArrowPreference(

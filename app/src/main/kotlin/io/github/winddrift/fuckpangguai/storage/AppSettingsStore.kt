@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.winddrift.fuckpangguai.BuildConfig
+import io.github.winddrift.fuckpangguai.confirm.UnlockAcceleration
 import io.github.winddrift.fuckpangguai.points.PointsSettingsSource
 import io.github.winddrift.fuckpangguai.storage.appDataStore
 import io.github.winddrift.fuckpangguai.water.WaterConversion
@@ -18,6 +19,10 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 enum class AppThemeMode { System, Light, Dark }
+
+private fun String?.toUnlockAcceleration(): UnlockAcceleration =
+    this?.let { stored -> UnlockAcceleration.entries.firstOrNull { it.name == stored } }
+        ?: UnlockAcceleration.Conservative
 
 data class ThemeSettings(
     val mode: AppThemeMode = AppThemeMode.System,
@@ -39,6 +44,17 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
 
     suspend fun setDryRun(enabled: Boolean) {
         context.appDataStore.edit { it[DRY_RUN] = enabled }
+    }
+
+    val unlockAcceleration: Flow<UnlockAcceleration> = context.appDataStore.data.map { preferences ->
+        preferences[UNLOCK_ACCELERATION].toUnlockAcceleration()
+    }
+
+    override suspend fun getUnlockAcceleration(): UnlockAcceleration =
+        context.appDataStore.data.first()[UNLOCK_ACCELERATION].toUnlockAcceleration()
+
+    suspend fun setUnlockAcceleration(value: UnlockAcceleration) {
+        context.appDataStore.edit { it[UNLOCK_ACCELERATION] = value.name }
     }
 
     val skipDeviceInfo: Flow<Boolean> = context.appDataStore.data.map { preferences ->
@@ -159,6 +175,7 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
         val SKIP_DEVICE_INFO = booleanPreferencesKey("skip_device_info")
         val AUTO_START_CAMERA = booleanPreferencesKey("auto_start_camera")
         val DRY_RUN = booleanPreferencesKey("dry_run")
+        val UNLOCK_ACCELERATION = stringPreferencesKey("unlock_acceleration")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val FLOATING_NAV_BAR = booleanPreferencesKey("floating_nav_bar")

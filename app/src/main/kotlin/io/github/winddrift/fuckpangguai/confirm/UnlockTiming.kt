@@ -20,6 +20,7 @@ enum class UnlockOutcome {
 data class UnlockTiming(
     val atMillis: Long,
     val outcome: UnlockOutcome,
+    val acceleration: UnlockAcceleration = UnlockAcceleration.Conservative,
     val channelMethod: Int,
     val channelName: String,
     val prebindAttempted: Boolean,
@@ -30,6 +31,8 @@ data class UnlockTiming(
     val unlockCallMs: Long,
     val syncPollCount: Int,
     val syncDurationMs: Long,
+    val syncSource: String = "",
+    val deviceStartProbes: Int = 0,
     val totalMs: Long,
     val errorKind: String? = null,
 ) {
@@ -44,9 +47,14 @@ data class UnlockTiming(
             bindSkipped -> "已绑定，跳过"
             else -> "等待 ${bindWaitMs}ms + 调用 ${bindCallMs}ms"
         }
+        val probe = if (syncSource == "deviceStart") {
+            "（deviceStart 探测 ${deviceStartProbes} 次）"
+        } else {
+            ""
+        }
         val error = errorKind?.let { " · $it" }.orEmpty()
-        return "${timeText()} $result · 总 ${totalMs}ms｜$channel｜$bind" +
-            "｜unlock ${unlockCallMs}ms｜同步 ${syncPollCount} 次/${syncDurationMs}ms$error"
+        return "${timeText()} $result · ${acceleration.displayName} · 总 ${totalMs}ms｜$channel｜$bind" +
+            "｜unlock ${unlockCallMs}ms｜同步 ${syncPollCount} 次/${syncDurationMs}ms$probe$error"
     }
 
     private fun timeText(): String =

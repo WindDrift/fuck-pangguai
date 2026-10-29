@@ -18,6 +18,10 @@ interface WaterDataSource {
 
     suspend fun msgSync(msgId: String): MsgSyncBean
     fun isDeviceReady(bean: MsgSyncBean): Boolean
+
+    /** 官方预付费分支用 `machine/device_is_start` 判断设备是否已启动；失败返回 null。 */
+    suspend fun queryDeviceStarted(orderNo: String): Boolean?
+
     suspend fun waterSync(skuId: String): WaterSync
     suspend fun endWater(goodsId: String)
     suspend fun afterPayCreate(identify: String): AfterPay

@@ -45,6 +45,11 @@ class WaterRepository(private val api: QiekjApi) : WaterDataSource {
     override fun isDeviceReady(bean: MsgSyncBean): Boolean =
         bean.state.equals("OK", ignoreCase = true) || bean.code == "05"
 
+    override suspend fun queryDeviceStarted(orderNo: String): Boolean? {
+        val response = api.deviceStartStatus(mapOf("orderNo" to orderNo))
+        return if (response.isSuccess) response.data else null
+    }
+
     override suspend fun waterSync(skuId: String): WaterSync {
         val response = api.waterSync(mapOf("skuId" to skuId))
         if (!response.isSuccess) throw ApiException(response.code, response.msg)

@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -415,6 +416,127 @@ class ConfirmControllerTest {
     }
 
     @Test
+    fun `disabled acceleration binds on click and polls every second`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Disabled)
+        deps.waterSource.readyAfterCalls = 3
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        assertEquals(0, deps.deviceSource.bindCalls)
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(1, deps.deviceSource.bindCalls)
+        assertEquals(3, deps.waterSource.msgSyncCalls)
+        assertEquals(2_000L, testScheduler.currentTime)
+
+        val timing = deps.timingSink.entries.single()
+        assertEquals(UnlockAcceleration.Disabled, timing.acceleration)
+        assertFalse(timing.prebindAttempted)
+        assertFalse(timing.bindSkipped)
+    }
+
+    @Test
+    fun `aggressive polls faster during the fast window`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Aggressive)
+        deps.waterSource.readyAfterCalls = 12
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(12, deps.waterSource.msgSyncCalls)
+        assertEquals(1_100L, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `aggressive does not wait for an in-flight prebind`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Aggressive)
+        val gate = CompletableDeferred<Unit>()
+        deps.deviceSource.bindGate = gate
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(1, deps.deviceSource.bindCalls)
+        assertEquals(1, deps.waterSource.unlockCalls)
+        val timing = deps.timingSink.entries.single()
+        assertTrue(timing.prebindAttempted)
+        assertTrue(timing.bindSkipped)
+        assertTrue(timing.prebound)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(1, deps.deviceSource.bindCalls)
+    }
+
+    @Test
+    fun `aggressive retries prebind after a skipped failure`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Aggressive)
+        val gate = CompletableDeferred<Unit>()
+        deps.deviceSource.bindGate = gate
+        deps.deviceSource.bindFailures = 1
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(2, deps.deviceSource.bindCalls)
+        assertEquals(listOf(15, 15), deps.deviceSource.bindMethods)
+    }
+
+    @Test
+    fun `insane accepts device start probe as ready`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Insane, msgReady = false)
+        deps.waterSource.startedAfterCalls = 1
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(1, deps.waterSource.msgSyncCalls)
+        assertEquals(1, deps.waterSource.deviceStartCalls)
+        val timing = deps.timingSink.entries.single()
+        assertEquals(UnlockAcceleration.Insane, timing.acceleration)
+        assertEquals("deviceStart", timing.syncSource)
+        assertEquals(1, timing.deviceStartProbes)
+    }
+
+    @Test
+    fun `insane falls back to msg sync when device start probe fails`() = runTest {
+        val deps = Deps(acceleration = UnlockAcceleration.Insane)
+        deps.waterSource.deviceStartFails = true
+        deps.waterSource.readyAfterCalls = 2
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(2, deps.waterSource.msgSyncCalls)
+        assertTrue(deps.waterSource.deviceStartCalls >= 1)
+        assertEquals("msgSync", deps.timingSink.entries.single().syncSource)
+    }
+
+    @Test
     fun `unlock records phase timings`() = runTest {
         val deps = Deps()
         val controller = deps.controller(this)
@@ -425,6 +547,8 @@ class ConfirmControllerTest {
 
         val timing = deps.timingSink.entries.single()
         assertEquals(UnlockOutcome.Unlocked, timing.outcome)
+        assertEquals(UnlockAcceleration.Conservative, timing.acceleration)
+        assertEquals("msgSync", timing.syncSource)
         assertEquals(15, timing.channelMethod)
         assertEquals("支付宝免密", timing.channelName)
         assertEquals(1, timing.syncPollCount)
@@ -612,6 +736,7 @@ class ConfirmControllerTest {
         unlockFails: Boolean = false,
         cachedPlans: DevicePlans? = null,
         refreshFails: Boolean = false,
+        acceleration: UnlockAcceleration = UnlockAcceleration.Conservative,
     ) {
         val device = ResolvedDevice(
             scan = ScanV2Bean(categoryCode = "04", categoryName = "饮水机", id = "goods-1"),
@@ -633,7 +758,7 @@ class ConfirmControllerTest {
         }
         val waterSource = FakeWaterSource(msgReady, unlockFails, events)
         val locationSource = FakeLocationSource(locationGranted)
-        val settingsSource = FakeSettingsSource(oneTap, dryRun)
+        val settingsSource = FakeSettingsSource(oneTap, dryRun, acceleration)
         val configSource = FakeConfigSource()
         val timingSink = FakeTimingSink()
 
@@ -712,6 +837,9 @@ class ConfirmControllerTest {
     ) : WaterDataSource {
         var unlockCalls = 0
         var msgSyncCalls = 0
+        var deviceStartCalls = 0
+        var deviceStartFails = false
+        var startedAfterCalls = Int.MAX_VALUE
         var readyAfterCalls = if (msgReady) 1 else Int.MAX_VALUE
 
         override suspend fun unlock(
@@ -739,6 +867,12 @@ class ConfirmControllerTest {
 
         override fun isDeviceReady(bean: MsgSyncBean) =
             bean.state.equals("OK", ignoreCase = true) || bean.code == "05"
+
+        override suspend fun queryDeviceStarted(orderNo: String): Boolean? {
+            deviceStartCalls += 1
+            if (deviceStartFails) error("device start probe failed")
+            return deviceStartCalls >= startedAfterCalls
+        }
 
         override suspend fun waterSync(skuId: String) = WaterSync()
 
@@ -779,10 +913,13 @@ class ConfirmControllerTest {
     private class FakeSettingsSource(
         private val oneTap: Boolean,
         private val dryRun: Boolean,
+        private val acceleration: UnlockAcceleration = UnlockAcceleration.Conservative,
     ) : SettingsSource {
         override suspend fun isOneTapEnabled() = oneTap
 
         override suspend fun isDryRun() = dryRun
+
+        override suspend fun getUnlockAcceleration() = acceleration
     }
 
     private class FakeConfigSource : DeviceConfigSource {

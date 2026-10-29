@@ -41,6 +41,7 @@ class UnlockTimingTest {
         ).toText()
 
         assertTrue(text.contains("失败"))
+        assertTrue(text.contains("保守"))
         assertTrue(text.contains("总 900ms"))
         assertTrue(text.contains("ApiException--1"))
         assertFalse(text.contains("order", ignoreCase = true))
@@ -48,13 +49,29 @@ class UnlockTimingTest {
         assertFalse(text.contains("lat", ignoreCase = true))
     }
 
+    @Test
+    fun `text shows the acceleration tier and device start probe`() {
+        val text = timing(
+            acceleration = UnlockAcceleration.Insane,
+            syncSource = "deviceStart",
+            deviceStartProbes = 2,
+        ).toText()
+
+        assertTrue(text.contains("丧心病狂"))
+        assertTrue(text.contains("deviceStart 探测 2 次"))
+    }
+
     private fun timing(
         outcome: UnlockOutcome = UnlockOutcome.Unlocked,
         totalMs: Long = 900L,
         errorKind: String? = null,
+        acceleration: UnlockAcceleration = UnlockAcceleration.Conservative,
+        syncSource: String = "msgSync",
+        deviceStartProbes: Int = 0,
     ) = UnlockTiming(
         atMillis = 1_700_000_000_000L,
         outcome = outcome,
+        acceleration = acceleration,
         channelMethod = 15,
         channelName = "支付宝免密",
         prebindAttempted = true,
@@ -65,6 +82,8 @@ class UnlockTimingTest {
         unlockCallMs = 180L,
         syncPollCount = 3,
         syncDurationMs = 620L,
+        syncSource = syncSource,
+        deviceStartProbes = deviceStartProbes,
         totalMs = totalMs,
         errorKind = errorKind,
     )

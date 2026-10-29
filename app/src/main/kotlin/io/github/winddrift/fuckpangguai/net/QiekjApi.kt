@@ -76,6 +76,10 @@ interface QiekjApi {
     suspend fun msgSync(@FieldMap body: Map<String, String>): ApiResponse<MsgSyncBean>
 
     @FormUrlEncoded
+    @POST("machine/device_is_start")
+    suspend fun deviceStartStatus(@FieldMap body: Map<String, String>): ApiResponse<Boolean>
+
+    @FormUrlEncoded
     @POST("/goods/water/sync")
     suspend fun waterSync(@FieldMap body: Map<String, String>): ApiResponse<WaterSync>
 
