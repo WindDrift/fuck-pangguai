@@ -115,6 +115,14 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
         preferences[POINTS_EXPERIMENT_ENABLED] ?: false
     }
 
+    override val farmEnabled: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[POINTS_FARM_ENABLED] ?: false
+    }
+
+    override val deductEnabled: Flow<Boolean> = context.appDataStore.data.map { preferences ->
+        preferences[POINTS_DEDUCT_ENABLED] ?: false
+    }
+
     override val riskAcknowledged: Flow<Boolean> = context.appDataStore.data.map { preferences ->
         preferences[POINTS_RISK_ACKNOWLEDGED] ?: false
     }
@@ -130,6 +138,17 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
     override suspend fun setExperimentEnabled(enabled: Boolean) {
         context.appDataStore.edit { it[POINTS_EXPERIMENT_ENABLED] = enabled }
     }
+
+    override suspend fun setFarmEnabled(enabled: Boolean) {
+        context.appDataStore.edit { it[POINTS_FARM_ENABLED] = enabled }
+    }
+
+    override suspend fun setDeductEnabled(enabled: Boolean) {
+        context.appDataStore.edit { it[POINTS_DEDUCT_ENABLED] = enabled }
+    }
+
+    override suspend fun isPointsDeductEnabled(): Boolean =
+        context.appDataStore.data.first()[POINTS_DEDUCT_ENABLED] ?: false
 
     override suspend fun acknowledgeRisk() {
         context.appDataStore.edit { it[POINTS_RISK_ACKNOWLEDGED] = true }
@@ -183,6 +202,8 @@ class AppSettingsStore(private val context: Context) : SettingsSource, PointsSet
         val POINTS_AUTO_ENABLED = booleanPreferencesKey("points_auto_enabled")
         val POINTS_RUN_ON_LAUNCH = booleanPreferencesKey("points_run_on_launch")
         val POINTS_EXPERIMENT_ENABLED = booleanPreferencesKey("points_direct_task_experiment")
+        val POINTS_FARM_ENABLED = booleanPreferencesKey("points_farm_enabled")
+        val POINTS_DEDUCT_ENABLED = booleanPreferencesKey("points_deduct_enabled")
         val POINTS_RISK_ACKNOWLEDGED = booleanPreferencesKey("points_risk_acknowledged")
         val WATER_USAGE_BASE = stringPreferencesKey("water_usage_base")
         val WATER_VOLUME_ML = stringPreferencesKey("water_volume_ml")

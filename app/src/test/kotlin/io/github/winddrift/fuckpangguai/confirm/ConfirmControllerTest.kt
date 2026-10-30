@@ -13,6 +13,9 @@ import io.github.winddrift.fuckpangguai.net.dto.ScanV2Bean
 import io.github.winddrift.fuckpangguai.net.dto.Sku
 import io.github.winddrift.fuckpangguai.net.dto.Unlock
 import io.github.winddrift.fuckpangguai.net.dto.WaterSync
+import io.github.winddrift.fuckpangguai.points.PointsDeductEligibility
+import io.github.winddrift.fuckpangguai.points.PointsDeductReason
+import io.github.winddrift.fuckpangguai.points.PointsDeductSource
 import io.github.winddrift.fuckpangguai.storage.ConfirmedDevice
 import io.github.winddrift.fuckpangguai.storage.DeviceConfigSource
 import io.github.winddrift.fuckpangguai.storage.SettingsSource
@@ -737,6 +740,54 @@ class ConfirmControllerTest {
         assertEquals(LocationPhase.Ready, updated.value.locationPhase)
     }
 
+    @Test
+    fun `points deduction is sent when enabled and eligible`() = runTest {
+        val deps = Deps(pointsDeduct = true)
+        deps.deductSource.result = PointsDeductEligibility.Available(800)
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(listOf(true), deps.waterSource.usePointsCalls)
+        assertEquals(1, deps.deductSource.calls)
+    }
+
+    @Test
+    fun `points deduction is skipped without integral`() = runTest {
+        val deps = Deps(pointsDeduct = true)
+        deps.deductSource.result =
+            PointsDeductEligibility.Unavailable(PointsDeductReason.NoIntegral)
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(listOf(false), deps.waterSource.usePointsCalls)
+    }
+
+    @Test
+    fun `points deduction is skipped when setting is off`() = runTest {
+        val deps = Deps(pointsDeduct = false)
+        deps.deductSource.result = PointsDeductEligibility.Available(800)
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        controller.unlock()
+        advanceUntilIdle()
+
+        assertTrue(controller.state.value is ConfirmState.Unlocked)
+        assertEquals(listOf(false), deps.waterSource.usePointsCalls)
+        assertEquals(0, deps.deductSource.calls)
+    }
+
     private fun device(
         bluetooth: Int = 0,
         goodsId: String = "goods-1",
@@ -791,6 +842,7 @@ class ConfirmControllerTest {
         cachedPlans: DevicePlans? = null,
         refreshFails: Boolean = false,
         acceleration: UnlockAcceleration = UnlockAcceleration.Conservative,
+        pointsDeduct: Boolean = false,
     ) {
         val device = ResolvedDevice(
             scan = ScanV2Bean(categoryCode = "04", categoryName = "饮水机", id = "goods-1"),
@@ -812,9 +864,10 @@ class ConfirmControllerTest {
         }
         val waterSource = FakeWaterSource(msgReady, unlockFails, events)
         val locationSource = FakeLocationSource(locationGranted)
-        val settingsSource = FakeSettingsSource(oneTap, dryRun, acceleration)
+        val settingsSource = FakeSettingsSource(oneTap, dryRun, acceleration, pointsDeduct)
         val configSource = FakeConfigSource()
         val timingSink = FakeTimingSink()
+        val deductSource = FakeDeductSource()
 
         fun controller(scope: CoroutineScope) =
             ConfirmController(
@@ -824,6 +877,7 @@ class ConfirmControllerTest {
                 locationProvider = locationSource,
                 settingsStore = settingsSource,
                 configStore = configSource,
+                pointsDeduct = deductSource,
                 timingSink = timingSink,
             )
     }
@@ -896,6 +950,7 @@ class ConfirmControllerTest {
         var deviceStartGate: CompletableDeferred<Unit>? = null
         var startedAfterCalls = Int.MAX_VALUE
         var readyAfterCalls = if (msgReady) 1 else Int.MAX_VALUE
+        val usePointsCalls = mutableListOf<Boolean>()
 
         override suspend fun unlock(
             detail: GoodsDetail,
@@ -904,8 +959,10 @@ class ConfirmControllerTest {
             lng: String,
             payType: String,
             iotBOrderNo: String,
+            usePoints: Boolean,
         ): Unlock {
             unlockCalls += 1
+            usePointsCalls += usePoints
             events += "unlock"
             if (unlockFails) error("unlock failed")
             return Unlock(orderNo = "order-1", msgId = "msg-1")
@@ -972,12 +1029,26 @@ class ConfirmControllerTest {
         private val oneTap: Boolean,
         private val dryRun: Boolean,
         private val acceleration: UnlockAcceleration = UnlockAcceleration.Conservative,
+        private val pointsDeduct: Boolean = false,
     ) : SettingsSource {
         override suspend fun isOneTapEnabled() = oneTap
 
         override suspend fun isDryRun() = dryRun
 
         override suspend fun getUnlockAcceleration() = acceleration
+
+        override suspend fun isPointsDeductEnabled() = pointsDeduct
+    }
+
+    private class FakeDeductSource : PointsDeductSource {
+        var result: PointsDeductEligibility =
+            PointsDeductEligibility.Unavailable(PointsDeductReason.NoIntegral)
+        var calls = 0
+
+        override suspend fun loadEligibility(): PointsDeductEligibility {
+            calls += 1
+            return result
+        }
     }
 
     private class FakeConfigSource : DeviceConfigSource {

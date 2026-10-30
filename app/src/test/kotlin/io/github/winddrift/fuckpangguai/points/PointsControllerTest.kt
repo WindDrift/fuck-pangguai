@@ -147,6 +147,72 @@ class PointsControllerTest {
     }
 
     @Test
+    fun `farm switch alone triggers launch run and completes all tasks`() = runTest {
+        val deps = Deps()
+        deps.settings.auto.value = false
+        deps.settings.launch.value = true
+        deps.settings.farm.value = true
+        deps.data.tasks = listOf(
+            IntegralTaskDto(
+                taskCode = "pack",
+                taskType = JsonPrimitive(621),
+                title = "任务包",
+                awardType = 1,
+                completedStatus = 0,
+                status = 1,
+                subtaskList = listOf(
+                    SubtaskDto(
+                        taskCode = "pack-sub-task",
+                        subtaskCode = "pack-sub",
+                        completedStatus = 0,
+                        dailyTaskLimit = 1,
+                    ),
+                ),
+            ),
+            IntegralTaskDto(
+                taskCode = "video",
+                taskType = JsonPrimitive(637),
+                title = "看视频",
+                awardType = 1,
+                completedStatus = 0,
+                status = 1,
+                dailyTaskLimit = 2,
+                extendMap = JsonPrimitive("ad"),
+            ),
+        )
+        deps.data.queryTaskHandler = { null }
+        val controller = deps.controller(this)
+        advanceUntilIdle()
+
+        controller.onAppForeground()
+        advanceUntilIdle()
+
+        assertEquals(1, deps.data.signInCalls)
+        assertEquals(listOf("pack-sub-task" to "pack-sub"), deps.data.completed.take(1))
+        assertEquals(2, deps.data.completed.count { it.first == "video" })
+        assertTrue(controller.state.value.lastRun?.farm == true)
+        assertEquals(3, controller.state.value.lastRun?.completed)
+    }
+
+    @Test
+    fun `farm mode stops completing after two captcha responses`() = runTest {
+        val deps = Deps()
+        deps.settings.auto.value = true
+        deps.settings.farm.value = true
+        deps.data.captcha = true
+        deps.data.tasks = listOf(directTask("task-1"), directTask("task-2"))
+        deps.data.queryTaskHandler = { null }
+        val controller = deps.controller(this)
+        advanceUntilIdle()
+
+        controller.onAppForeground()
+        advanceUntilIdle()
+
+        assertEquals(0, deps.data.completed.size)
+        assertEquals(2, controller.state.value.lastRun?.captchaBlocked)
+    }
+
+    @Test
     fun `account switch resets points state`() = runTest {
         val deps = Deps()
         val controller = deps.controller(this)
@@ -220,11 +286,15 @@ class PointsControllerTest {
         val auto = MutableStateFlow(false)
         val launch = MutableStateFlow(true)
         val experiment = MutableStateFlow(false)
+        val farm = MutableStateFlow(false)
+        val deduct = MutableStateFlow(false)
         val risk = MutableStateFlow(false)
 
         override val autoEnabled = auto
         override val runOnLaunch = launch
         override val experimentEnabled = experiment
+        override val farmEnabled = farm
+        override val deductEnabled = deduct
         override val riskAcknowledged = risk
 
         override suspend fun setAutoEnabled(enabled: Boolean) {
@@ -237,6 +307,14 @@ class PointsControllerTest {
 
         override suspend fun setExperimentEnabled(enabled: Boolean) {
             experiment.value = enabled
+        }
+
+        override suspend fun setFarmEnabled(enabled: Boolean) {
+            farm.value = enabled
+        }
+
+        override suspend fun setDeductEnabled(enabled: Boolean) {
+            deduct.value = enabled
         }
 
         override suspend fun acknowledgeRisk() {

@@ -34,6 +34,13 @@ data class IntegralTaskDto(
 )
 
 @Serializable
+data class IntegralLimitRuleDto(
+    val integralTotal: Int = 0,
+    val isUserIntegral: Boolean = false,
+    val minUsageCount: Int = 0,
+)
+
+@Serializable
 data class SubtaskDto(
     val taskCode: String = "",
     val subtaskCode: String = "",

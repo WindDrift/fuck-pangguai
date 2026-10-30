@@ -190,10 +190,11 @@ class AppGraph(context: Context) {
         diagnostics = diagnostics,
     )
 
+    val pointsRepository = QiekjPointsRepository(api, deviceId)
     val pointsController = PointsController(
         scope = scope,
         accountSource = AccountStorePointsSource(accountStore),
-        dataSource = QiekjPointsRepository(api, deviceId),
+        dataSource = pointsRepository,
         runStore = DataStorePointsRunStore(appContext),
         settings = settingsStore,
         notificationEnabled = {
@@ -249,6 +250,7 @@ class AppGraph(context: Context) {
         locationProvider = locationProvider,
         settingsStore = settingsStore,
         configStore = deviceConfigStore,
+        pointsDeduct = pointsRepository,
         timingSink = if (BuildConfig.DEBUG) UnlockTimingLog else NoopUnlockTimingSink,
         diagnostics = diagnostics,
     )

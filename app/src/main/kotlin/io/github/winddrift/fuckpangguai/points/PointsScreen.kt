@@ -65,6 +65,7 @@ fun PointsScreen(
     val colors = MiuixTheme.colorScheme
     val lifecycleOwner = LocalLifecycleOwner.current
     var showRiskDialog by remember { mutableStateOf(false) }
+    var showFarmRiskDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(account?.localId) {
         controller.onScreenVisible()
@@ -126,6 +127,17 @@ fun PointsScreen(
         }
 
         item {
+            PreferenceGroup(title = "积分自动抵扣") {
+                SwitchPreference(
+                    checked = state.deductEnabled,
+                    onCheckedChange = controller::setDeductEnabled,
+                    title = "积分自动抵扣",
+                    summary = "解锁饮水机时自动尝试使用积分抵现；仅在账号支持积分自动抵扣且无风控验证时生效",
+                )
+            }
+        }
+
+        item {
             PreferenceGroup(title = "自动积分") {
                 SwitchPreference(
                     checked = state.autoEnabled,
@@ -144,14 +156,27 @@ fun PointsScreen(
                     checked = state.runOnLaunch,
                     onCheckedChange = controller::setRunOnLaunch,
                     title = "启动 App 时检查",
-                    summary = "总开关开启后，App 启动或回前台时检查今日是否已运行",
+                    summary = "总开关或刷积分开启后，App 启动或回前台时检查今日是否已运行",
+                )
+                PreferenceDivider()
+                SwitchPreference(
+                    checked = state.farmEnabled,
+                    onCheckedChange = { checked ->
+                        if (checked && !state.riskAcknowledged) {
+                            showFarmRiskDialog = true
+                        } else {
+                            controller.setFarmEnabled(checked)
+                        }
+                    },
+                    title = "自动刷积分",
+                    summary = "签到后尝试全部积分任务和子任务，并按剩余次数重试；遇到验证码立即停止",
                 )
                 PreferenceDivider()
                 SwitchPreference(
                     checked = state.experimentEnabled,
                     onCheckedChange = controller::setExperimentEnabled,
                     title = "直接任务实验",
-                    summary = "仅尝试 taskType 7、无广告/H5/验证码且通知权限已开启的任务",
+                    summary = "标准模式下仅尝试 taskType 7、无广告/H5/验证码且通知权限已开启的任务",
                 )
             }
         }
@@ -161,6 +186,7 @@ fun PointsScreen(
                 KeyValueRow("当前状态", state.runStatus)
                 state.lastRun?.let { last ->
                     KeyValueRow("上次触发", last.trigger.label)
+                    KeyValueRow("模式", if (last.farm) "刷积分" else "标准")
                     KeyValueRow("签到", last.signIn)
                     KeyValueRow(
                         "任务",
@@ -299,6 +325,19 @@ fun PointsScreen(
             controller.setAutoEnabled(true)
         },
         onDismiss = { showRiskDialog = false },
+    )
+
+    ConfirmDialog(
+        show = showFarmRiskDialog,
+        title = "开启自动刷积分？",
+        summary = "刷积分会依次尝试任务列表中的全部积分任务（含子任务与广告、浏览类完成上报），并按剩余次数重试；" +
+            "遇到验证码会立即停止，不绕过验证，也不伪造广告回调。仍可能触发账号风控或积分清零，请自行评估风险。",
+        confirmText = "了解并开启",
+        onConfirm = {
+            controller.acknowledgeRisk()
+            controller.setFarmEnabled(true)
+        },
+        onDismiss = { showFarmRiskDialog = false },
     )
 }
 

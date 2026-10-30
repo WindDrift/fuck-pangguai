@@ -4,6 +4,7 @@ import io.github.winddrift.fuckpangguai.net.dto.AfterPay
 import io.github.winddrift.fuckpangguai.net.dto.ApiResponse
 import io.github.winddrift.fuckpangguai.net.dto.BillOrderDto
 import io.github.winddrift.fuckpangguai.net.dto.GoodsDetail
+import io.github.winddrift.fuckpangguai.net.dto.IntegralLimitRuleDto
 import io.github.winddrift.fuckpangguai.net.dto.IntegralTaskDto
 import io.github.winddrift.fuckpangguai.net.dto.ItemsList
 import io.github.winddrift.fuckpangguai.net.dto.LoginBean
@@ -124,6 +125,10 @@ interface QiekjApi {
     suspend fun userTokenCoinLogs(@FieldMap body: Map<String, String>): ApiResponse<ItemsList<TicketLog>>
 
     @FormUrlEncoded
+    @POST("tokenCoin/refund/apply")
+    suspend fun tokenCoinRefundApply(@FieldMap body: Map<String, String>): ApiResponse<JsonElement>
+
+    @FormUrlEncoded
     @POST("tokenCoin/goods")
     suspend fun ticketGoods(@FieldMap body: Map<String, String>): ApiResponse<TicketGoods>
 
@@ -170,4 +175,12 @@ interface QiekjApi {
     @FormUrlEncoded
     @POST("integralCaptcha/isCaptcha")
     suspend fun isCaptcha(@FieldMap body: Map<String, String>): ApiResponse<Boolean>
+
+    @FormUrlEncoded
+    @POST("userIntegral/limitRule")
+    suspend fun userIntegralRule(@FieldMap body: Map<String, String>): ApiResponse<IntegralLimitRuleDto>
+
+    @FormUrlEncoded
+    @POST("userIntegral/checkUserIsRisk")
+    suspend fun checkUserIsRisk(@FieldMap body: Map<String, String>): ApiResponse<Boolean>
 }

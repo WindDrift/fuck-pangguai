@@ -17,6 +17,7 @@ class WaterRepository(private val api: QiekjApi) : WaterDataSource {
         lng: String,
         payType: String,
         iotBOrderNo: String,
+        usePoints: Boolean,
     ): Unlock {
         val headers = mapOf(
             "imei" to detail.imei,
@@ -26,7 +27,7 @@ class WaterRepository(private val api: QiekjApi) : WaterDataSource {
         )
         val body = mutableMapOf(
             "skuId" to skuId,
-            "promotions" to WaterDefaults.PROMOTIONS,
+            "promotions" to WaterDefaults.promotions(usePoints),
         )
         if (payType.isNotEmpty()) body["payType"] = payType
         if (iotBOrderNo.isNotEmpty()) body["iotBOrderNo"] = iotBOrderNo

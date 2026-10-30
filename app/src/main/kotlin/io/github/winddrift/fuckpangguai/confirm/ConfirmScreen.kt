@@ -39,6 +39,7 @@ import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentSlideSpec
 import io.github.winddrift.fuckpangguai.ui.components.DeviceInfoCard
 import io.github.winddrift.fuckpangguai.ui.components.KeyValueRow
+import io.github.winddrift.fuckpangguai.points.PointsDeductEligibility
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
 import io.github.winddrift.fuckpangguai.ui.components.StatusCard
 import top.yukonga.miuix.kmp.basic.Button
@@ -149,6 +150,7 @@ fun ConfirmScreen(
                             },
                         )
                         KeyValueRow("payType", info.payType.ifBlank { "空" })
+                        KeyValueRow("积分抵扣", if (info.usePoints) "使用" else "不使用")
                         Text(
                             "关闭演练模式后才能真实调用 water/unlock。",
                             style = MiuixTheme.textStyles.footnote1,
@@ -189,6 +191,18 @@ fun ConfirmScreen(
                                     "未生效（首次确认或设置关闭）"
                                 },
                             )
+                            if (ready.deductEnabled) {
+                                KeyValueRow(
+                                    label = "积分抵扣",
+                                    value = when (val deduct = ready.deduct) {
+                                        null -> "正在检查…"
+                                        is PointsDeductEligibility.Available ->
+                                            "将使用 ${deduct.integralTotal} 积分"
+
+                                        is PointsDeductEligibility.Unavailable -> deduct.reason.label
+                                    },
+                                )
+                            }
                             if (ready.dryRun) {
                                 Text(
                                     "当前为演练模式，不会真实解锁。",

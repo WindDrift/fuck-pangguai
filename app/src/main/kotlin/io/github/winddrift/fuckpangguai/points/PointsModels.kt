@@ -9,11 +9,15 @@ interface PointsSettingsSource {
     val autoEnabled: Flow<Boolean>
     val runOnLaunch: Flow<Boolean>
     val experimentEnabled: Flow<Boolean>
+    val farmEnabled: Flow<Boolean>
+    val deductEnabled: Flow<Boolean>
     val riskAcknowledged: Flow<Boolean>
 
     suspend fun setAutoEnabled(enabled: Boolean)
     suspend fun setRunOnLaunch(enabled: Boolean)
     suspend fun setExperimentEnabled(enabled: Boolean)
+    suspend fun setFarmEnabled(enabled: Boolean)
+    suspend fun setDeductEnabled(enabled: Boolean)
     suspend fun acknowledgeRisk()
 }
 
@@ -52,6 +56,7 @@ data class PointsRunRecord(
     val finishedAt: Long = 0L,
     val trigger: PointsTrigger = PointsTrigger.Manual,
     val signIn: String = "",
+    val farm: Boolean = false,
     val attempted: Int = 0,
     val completed: Int = 0,
     val skipped: Int = 0,
@@ -117,5 +122,7 @@ data class PointsUiState(
     val autoEnabled: Boolean = false,
     val runOnLaunch: Boolean = true,
     val experimentEnabled: Boolean = false,
+    val farmEnabled: Boolean = false,
+    val deductEnabled: Boolean = false,
     val riskAcknowledged: Boolean = false,
 )

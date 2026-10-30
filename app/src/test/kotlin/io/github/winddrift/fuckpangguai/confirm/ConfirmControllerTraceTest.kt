@@ -202,6 +202,7 @@ class ConfirmControllerTraceTest {
             lng: String,
             payType: String,
             iotBOrderNo: String,
+            usePoints: Boolean,
         ): Unlock {
             unlockCalls += 1
             unlockGate?.await()

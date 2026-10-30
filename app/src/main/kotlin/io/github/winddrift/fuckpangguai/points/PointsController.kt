@@ -8,6 +8,7 @@ import io.github.winddrift.fuckpangguai.net.ApiException
 import io.github.winddrift.fuckpangguai.net.dto.IntegralTaskDto
 import io.github.winddrift.fuckpangguai.net.dto.SubtaskDto
 import io.github.winddrift.fuckpangguai.net.userMessage
+import io.github.winddrift.fuckpangguai.points.PointsTaskPolicy.asIntOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -66,6 +67,17 @@ class PointsController(
             }
         }
         scope.launch {
+            settings.farmEnabled.collect { enabled ->
+                _state.update { it.copy(farmEnabled = enabled) }
+                rebuildTasks()
+            }
+        }
+        scope.launch {
+            settings.deductEnabled.collect { enabled ->
+                _state.update { it.copy(deductEnabled = enabled) }
+            }
+        }
+        scope.launch {
             settings.riskAcknowledged.collect { acknowledged ->
                 _state.update { it.copy(riskAcknowledged = acknowledged) }
             }
@@ -103,8 +115,9 @@ class PointsController(
             if (!accountSource.hasActiveSession()) return@launch
             if (runJob?.isActive == true) return@launch
             val autoEnabled = safe { settings.autoEnabled.first() }.getOrDefault(false)
+            val farmEnabled = safe { settings.farmEnabled.first() }.getOrDefault(false)
             val runOnLaunch = safe { settings.runOnLaunch.first() }.getOrDefault(false)
-            if (!autoEnabled || !runOnLaunch) return@launch
+            if ((!autoEnabled && !farmEnabled) || !runOnLaunch) return@launch
             val attemptDate = safe { runStore.load(accountId) }.getOrNull()?.attemptDate.orEmpty()
             if (attemptDate == today()) return@launch
             startRun(accountId, PointsTrigger.AppStart)
@@ -122,13 +135,15 @@ class PointsController(
             if (runJob?.isActive == true) return@launch
             val autoEnabled = safe { settings.autoEnabled.first() }.getOrDefault(false)
             val experimentEnabled = safe { settings.experimentEnabled.first() }.getOrDefault(false)
+            val farmEnabled = safe { settings.farmEnabled.first() }.getOrDefault(false)
             updateIfActive(accountId) {
                 it.copy(
                     autoEnabled = autoEnabled,
                     experimentEnabled = experimentEnabled,
+                    farmEnabled = farmEnabled,
                 )
             }
-            if (autoEnabled) {
+            if (autoEnabled || farmEnabled) {
                 val attemptDate = safe { runStore.load(accountId) }.getOrNull()?.attemptDate.orEmpty()
                 if (attemptDate != today()) {
                     startRun(accountId, PointsTrigger.PointsPage)
@@ -194,18 +209,23 @@ class PointsController(
             if (runJob?.isActive == true) return@launch
             val rawTask = rawTasks.firstOrNull { it.taskCode == taskCode } ?: return@launch
             val experiment = safe { settings.experimentEnabled.first() }.getOrElse { return@launch }
+            val farm = safe { settings.farmEnabled.first() }.getOrDefault(false)
             val decision = PointsTaskPolicy.classify(
                 task = rawTask,
                 experimentEnabled = experiment,
                 notificationsEnabled = notificationEnabled(),
+                farmEnabled = farm,
             )
             if (decision !is PointsTaskDecision.AutoEligible) return@launch
-            if (!notificationEnabled()) {
+            if (rawTask.taskType.asIntOrNull() == 7 && !notificationEnabled()) {
                 _state.update { it.copy(error = "需要先开启通知权限") }
                 return@launch
             }
+            val subtask = rawTask.subtaskList.firstOrNull { it.completedStatus == 0 && !it.limitReached() }
+            val targetCode = subtask?.taskCode?.ifBlank { taskCode } ?: taskCode
+            val subtaskCode = subtask?.subtaskCode?.takeIf { it.isNotBlank() }
             refreshJob?.cancel()
-            runJob = scope.launch { completeTaskOnce(accountId, taskCode) }
+            runJob = scope.launch { completeTaskOnce(accountId, targetCode, subtaskCode) }
         }
     }
 
@@ -219,6 +239,14 @@ class PointsController(
 
     fun setExperimentEnabled(enabled: Boolean) {
         scope.launch { settings.setExperimentEnabled(enabled) }
+    }
+
+    fun setFarmEnabled(enabled: Boolean) {
+        scope.launch { settings.setFarmEnabled(enabled) }
+    }
+
+    fun setDeductEnabled(enabled: Boolean) {
+        scope.launch { settings.setDeductEnabled(enabled) }
     }
 
     fun acknowledgeRisk() {
@@ -267,7 +295,7 @@ class PointsController(
         }
     }
 
-    private suspend fun completeTaskOnce(accountId: String, taskCode: String) {
+    private suspend fun completeTaskOnce(accountId: String, taskCode: String, subtaskCode: String?) {
         updateIfActive(accountId) {
             it.copy(running = true, runStatus = "完成任务…", error = null)
         }
@@ -277,7 +305,7 @@ class PointsController(
                 return
             }
             delay(jitter())
-            dataSource.completeTask(taskCode, null)
+            dataSource.completeTask(taskCode, subtaskCode)
             onPointsChanged()
             loadPage(accountId)
         } catch (cancellation: CancellationException) {
@@ -297,6 +325,7 @@ class PointsController(
         var signInDone = false
         var failure: String? = null
         var taskError: String? = null
+        var farmMode = false
 
         fun log(level: PointsLogLevel, message: String) {
             logs += PointsLogEntry(at = nowMillis(), level = level, message = message)
@@ -319,10 +348,16 @@ class PointsController(
 
         try {
             val experimentEnabled = settings.experimentEnabled.first()
-            updateIfActive(accountId) { it.copy(experimentEnabled = experimentEnabled) }
+            farmMode = settings.farmEnabled.first()
+            updateIfActive(accountId) {
+                it.copy(experimentEnabled = experimentEnabled, farmEnabled = farmMode)
+            }
             runStore.recordAttempt(accountId, today)
-            withTimeout(RUN_TIMEOUT_MS) {
-                log(PointsLogLevel.Info, "开始运行（${trigger.label}）")
+            withTimeout(if (farmMode) FARM_RUN_TIMEOUT_MS else RUN_TIMEOUT_MS) {
+                log(
+                    PointsLogLevel.Info,
+                    "开始运行（${trigger.label}${if (farmMode) "，刷积分" else ""}）",
+                )
 
                 val activity = dataSource.loadSignInActivity()
                 when {
@@ -355,7 +390,16 @@ class PointsController(
                 if (tasks != null) {
                     rawTasks = tasks
                     rebuildTasks()
-                    runTaskPhase(counters, experimentEnabled, logSink)
+                    val runner = TaskRunner(
+                        counters = counters,
+                        log = logSink,
+                        maxAttempts = if (farmMode) MAX_FARM_ATTEMPTS else MAX_TASK_ATTEMPTS,
+                    )
+                    if (farmMode) {
+                        runFarmPhase(runner)
+                    } else {
+                        runTaskPhase(runner, experimentEnabled)
+                    }
                 }
             }
         } catch (timeout: TimeoutCancellationException) {
@@ -375,6 +419,7 @@ class PointsController(
                 finishedAt = finishedAt,
                 trigger = trigger,
                 signIn = if (signInDone) "已完成" else "未完成",
+                farm = farmMode,
                 attempted = counters.attempted,
                 completed = counters.completed,
                 skipped = counters.skipped,
@@ -405,78 +450,24 @@ class PointsController(
         }
     }
 
-    private suspend fun runTaskPhase(
-        counters: RunCounters,
-        experimentEnabled: Boolean,
-        log: (PointsLogLevel, String) -> Unit,
-    ) {
-        var captchaStreak = 0
-        var networkErrors = 0
-
-        suspend fun captchaRequired(): Boolean {
-            val check = safe { dataSource.isCaptchaRequired() }
-            if (check.isFailure) {
-                counters.skipped += 1
-                log(PointsLogLevel.Warning, "验证码检查失败，已跳过任务")
-                return true
-            }
-            if (!check.getOrDefault(false)) {
-                captchaStreak = 0
-                return false
-            }
-            captchaStreak += 1
-            counters.captchaBlocked += 1
-            counters.skipped += 1
-            log(PointsLogLevel.Warning, "任务需要验证，已跳过")
-            return true
-        }
-
-        suspend fun runOne(taskCode: String, subtaskCode: String?, browseDelay: Boolean) {
-            if (counters.attempted >= MAX_TASK_ATTEMPTS) return
-            if (captchaStreak >= MAX_CAPTCHA_STREAK) return
-            if (captchaRequired()) return
-            if (browseDelay) delay(browseDelay()) else delay(jitter())
-            try {
-                counters.attempted += 1
-                dataSource.completeTask(taskCode, subtaskCode)
-                counters.completed += 1
-                networkErrors = 0
-                log(PointsLogLevel.Success, "任务完成：$taskCode")
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (throwable: Throwable) {
-                if (isAuthExpired(throwable)) throw throwable
-                counters.skipped += 1
-                if (throwable is IOException) networkErrors += 1
-                log(PointsLogLevel.Warning, "任务失败：$taskCode（${throwable.userMessage()}）")
-                if (networkErrors >= MAX_NETWORK_ERRORS) {
-                    log(PointsLogLevel.Error, "连续网络错误，停止任务阶段")
-                    throw StopTaskPhase
-                }
-            }
-        }
-
+    private suspend fun runTaskPhase(runner: TaskRunner, experimentEnabled: Boolean) {
+        val log = runner.log
         try {
             val parent = safe { dataSource.queryTask(PointsTaskPolicy.HOME_BROWSE_TASK_CODE) }
                 .onFailure { log(PointsLogLevel.Warning, "首页浏览任务加载失败：${it.userMessage()}") }
                 .getOrNull()
             if (parent != null && parent.status != 0 && parent.completedStatus != 1) {
                 if (PointsTaskPolicy.limitReached(parent)) {
-                    counters.skipped += 1
-                    log(PointsLogLevel.Info, "首页浏览已达次数上限")
+                    runner.skip("首页浏览已达次数上限")
                 } else {
                     val subtask = parent.subtaskList.firstOrNull { it.completedStatus == 0 }
                     when {
                         subtask == null -> log(PointsLogLevel.Info, "首页浏览无待完成子任务")
-                        subtask.limitReached() -> {
-                            counters.skipped += 1
-                            log(PointsLogLevel.Info, "首页浏览子任务已达次数上限")
-                        }
-
+                        subtask.limitReached() -> runner.skip("首页浏览子任务已达次数上限")
                         else -> {
                             val taskCode = subtask.taskCode.ifBlank { parent.taskCode }
                             val subtaskCode = subtask.subtaskCode.ifBlank { null }
-                            runOne(taskCode, subtaskCode, browseDelay = true)
+                            runner.runOne(taskCode, subtaskCode, browseDelay = true)
                         }
                     }
                 }
@@ -495,9 +486,8 @@ class PointsController(
                     }
                     .take(MAX_DIRECT_TASKS)
                 for (task in candidates) {
-                    if (counters.attempted >= MAX_TASK_ATTEMPTS) break
-                    if (captchaStreak >= MAX_CAPTCHA_STREAK) break
-                    runOne(task.taskCode, null, browseDelay = false)
+                    if (!runner.canContinue()) break
+                    runner.runOne(task.taskCode, null, browseDelay = false)
                 }
             }
         } catch (stop: StopTaskPhase) {
@@ -507,6 +497,134 @@ class PointsController(
         } catch (throwable: Throwable) {
             if (isAuthExpired(throwable)) throw throwable
             log(PointsLogLevel.Warning, "任务阶段异常：${throwable.userMessage()}")
+        }
+    }
+
+    private suspend fun runFarmPhase(runner: TaskRunner) {
+        val log = runner.log
+        try {
+            var parent = safe { dataSource.queryTask(PointsTaskPolicy.HOME_BROWSE_TASK_CODE) }
+                .onFailure { log(PointsLogLevel.Warning, "首页浏览任务加载失败：${it.userMessage()}") }
+                .getOrNull()
+            var rounds = 0
+            while (parent != null && rounds < MAX_FARM_BROWSE_ROUNDS) {
+                if (parent.status == 0 || parent.completedStatus == 1) break
+                if (PointsTaskPolicy.limitReached(parent)) {
+                    log(PointsLogLevel.Info, "首页浏览已达次数上限")
+                    break
+                }
+                val subtask = parent.subtaskList
+                    .firstOrNull { it.completedStatus == 0 && !it.limitReached() }
+                    ?: break
+                val ok = runner.runOne(
+                    subtask.taskCode.ifBlank { parent.taskCode },
+                    subtask.subtaskCode.ifBlank { null },
+                    browseDelay = true,
+                )
+                if (!ok) break
+                rounds += 1
+                parent = safe { dataSource.queryTask(PointsTaskPolicy.HOME_BROWSE_TASK_CODE) }.getOrNull()
+            }
+
+            val candidates = rawTasks
+                .filter {
+                    it.taskCode != PointsTaskPolicy.HOME_BROWSE_TASK_CODE &&
+                        PointsTaskPolicy.classify(
+                            task = it,
+                            experimentEnabled = false,
+                            notificationsEnabled = notificationEnabled(),
+                            farmEnabled = true,
+                        ) is PointsTaskDecision.AutoEligible
+                }
+                .take(MAX_FARM_TASKS)
+            for (task in candidates) {
+                if (!runner.canContinue()) break
+                if (task.subtaskList.isNotEmpty()) {
+                    for (subtask in task.subtaskList.filter { it.completedStatus == 0 && !it.limitReached() }) {
+                        if (!runner.canContinue()) break
+                        val ok = runner.runOne(
+                            subtask.taskCode.ifBlank { task.taskCode },
+                            subtask.subtaskCode.ifBlank { null },
+                            browseDelay = false,
+                        )
+                        if (!ok) break
+                    }
+                } else {
+                    var remaining = PointsTaskPolicy.remainingAttempts(task, MAX_FARM_PER_TASK)
+                    while (remaining > 0 && runner.canContinue()) {
+                        if (!runner.runOne(task.taskCode, null, browseDelay = false)) break
+                        remaining -= 1
+                    }
+                }
+            }
+        } catch (stop: StopTaskPhase) {
+            // 已记录停止原因。
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (throwable: Throwable) {
+            if (isAuthExpired(throwable)) throw throwable
+            log(PointsLogLevel.Warning, "刷积分阶段异常：${throwable.userMessage()}")
+        }
+    }
+
+    private inner class TaskRunner(
+        private val counters: RunCounters,
+        val log: (PointsLogLevel, String) -> Unit,
+        private val maxAttempts: Int,
+    ) {
+        private var captchaStreak = 0
+        private var networkErrors = 0
+
+        fun canContinue(): Boolean =
+            counters.attempted < maxAttempts && captchaStreak < MAX_CAPTCHA_STREAK
+
+        fun skip(message: String) {
+            counters.skipped += 1
+            log(PointsLogLevel.Info, message)
+        }
+
+        private suspend fun captchaRequired(): Boolean {
+            val check = safe { dataSource.isCaptchaRequired() }
+            if (check.isFailure) {
+                counters.skipped += 1
+                log(PointsLogLevel.Warning, "验证码检查失败，已跳过任务")
+                return true
+            }
+            if (!check.getOrDefault(false)) {
+                captchaStreak = 0
+                return false
+            }
+            captchaStreak += 1
+            counters.captchaBlocked += 1
+            counters.skipped += 1
+            log(PointsLogLevel.Warning, "任务需要验证，已跳过")
+            return true
+        }
+
+        suspend fun runOne(taskCode: String, subtaskCode: String?, browseDelay: Boolean): Boolean {
+            if (!canContinue()) return false
+            if (captchaRequired()) return false
+            if (browseDelay) delay(browseDelay()) else delay(jitter())
+            return try {
+                counters.attempted += 1
+                dataSource.completeTask(taskCode, subtaskCode)
+                counters.completed += 1
+                networkErrors = 0
+                log(PointsLogLevel.Success, "任务完成：$taskCode")
+                true
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (throwable: Throwable) {
+                if (isAuthExpired(throwable)) throw throwable
+                counters.skipped += 1
+                if (throwable is IOException) networkErrors += 1
+                log(PointsLogLevel.Warning, "任务失败：$taskCode（${throwable.userMessage()}）")
+                if (networkErrors >= MAX_NETWORK_ERRORS) {
+                    log(PointsLogLevel.Error, "连续网络错误，停止任务阶段")
+                    throw StopTaskPhase
+                }
+                false
+            }
         }
     }
 
@@ -598,6 +716,7 @@ class PointsController(
                     task = task,
                     experimentEnabled = _state.value.experimentEnabled,
                     notificationsEnabled = notifications,
+                    farmEnabled = _state.value.farmEnabled,
                 ),
             )
         }.sortedWith(
@@ -654,9 +773,14 @@ class PointsController(
 
     private companion object {
         const val RUN_TIMEOUT_MS = 120_000L
+        const val FARM_RUN_TIMEOUT_MS = 180_000L
         const val MAX_LOGS = 50
         const val MAX_TASK_ATTEMPTS = 5
         const val MAX_DIRECT_TASKS = 4
+        const val MAX_FARM_ATTEMPTS = 30
+        const val MAX_FARM_TASKS = 20
+        const val MAX_FARM_PER_TASK = 3
+        const val MAX_FARM_BROWSE_ROUNDS = 5
         const val MAX_CAPTCHA_STREAK = 2
         const val MAX_NETWORK_ERRORS = 3
         val AUTH_EXPIRED_CODES = setOf(2, 10, 126)

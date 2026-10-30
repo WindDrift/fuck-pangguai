@@ -14,6 +14,7 @@ interface WaterDataSource {
         lng: String,
         payType: String = "",
         iotBOrderNo: String = "",
+        usePoints: Boolean = false,
     ): Unlock
 
     suspend fun msgSync(msgId: String): MsgSyncBean

@@ -6,6 +6,8 @@ interface SettingsSource {
     suspend fun isOneTapEnabled(): Boolean
     suspend fun isDryRun(): Boolean
     suspend fun getUnlockAcceleration(): UnlockAcceleration
+
+    suspend fun isPointsDeductEnabled(): Boolean = false
 }
 
 interface DeviceConfigSource {

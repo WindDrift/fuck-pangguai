@@ -3,6 +3,7 @@ package io.github.winddrift.fuckpangguai.points
 import io.github.winddrift.fuckpangguai.account.AccountStore
 import io.github.winddrift.fuckpangguai.net.ApiException
 import io.github.winddrift.fuckpangguai.net.QiekjApi
+import io.github.winddrift.fuckpangguai.net.dto.IntegralLimitRuleDto
 import io.github.winddrift.fuckpangguai.net.dto.IntegralTaskDto
 import io.github.winddrift.fuckpangguai.net.dto.SignInActDto
 import io.github.winddrift.fuckpangguai.net.requireSuccess
@@ -21,7 +22,18 @@ interface PointsDataSource {
 class QiekjPointsRepository(
     private val api: QiekjApi,
     private val deviceId: String,
-) : PointsDataSource {
+) : PointsDataSource, PointsDeductSource {
+
+    override suspend fun loadEligibility(): PointsDeductEligibility {
+        val ruleResponse = api.userIntegralRule(emptyMap())
+        requireSuccess(ruleResponse.code, ruleResponse.msg)
+        val ruleResult = PointsDeductPolicy.evaluateRule(ruleResponse.data ?: IntegralLimitRuleDto())
+        if (!ruleResult.usable) return ruleResult
+
+        val riskResponse = api.checkUserIsRisk(emptyMap())
+        requireSuccess(riskResponse.code, riskResponse.msg)
+        return PointsDeductPolicy.applyRisk(ruleResult, riskResponse.data == true)
+    }
 
     override suspend fun loadBalance(): String {
         val response = api.userBalance(emptyMap())

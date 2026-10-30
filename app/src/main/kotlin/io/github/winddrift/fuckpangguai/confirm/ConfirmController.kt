@@ -19,12 +19,17 @@ import io.github.winddrift.fuckpangguai.net.userMessage
 import io.github.winddrift.fuckpangguai.net.dto.PayChannelRoute
 import io.github.winddrift.fuckpangguai.net.dto.Sku
 import io.github.winddrift.fuckpangguai.net.dto.Unlock
+import io.github.winddrift.fuckpangguai.points.NoopPointsDeductSource
+import io.github.winddrift.fuckpangguai.points.PointsDeductEligibility
+import io.github.winddrift.fuckpangguai.points.PointsDeductReason
+import io.github.winddrift.fuckpangguai.points.PointsDeductSource
 import io.github.winddrift.fuckpangguai.storage.ConfirmedDevice
 import io.github.winddrift.fuckpangguai.storage.DeviceConfigSource
 import io.github.winddrift.fuckpangguai.storage.SettingsSource
 import io.github.winddrift.fuckpangguai.water.WaterDefaults
 import io.github.winddrift.fuckpangguai.water.WaterDataSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -63,6 +68,8 @@ data class ConfirmReady(
     val oneTap: Boolean,
     val dryRun: Boolean,
     val confirmed: Boolean,
+    val deductEnabled: Boolean = false,
+    val deduct: PointsDeductEligibility? = null,
 ) {
     val sku: Sku get() = skus[selectedSkuIndex]
     val channel: PayChannelRoute get() = channels[selectedChannelIndex]
@@ -77,6 +84,7 @@ data class DryRunInfo(
     val lat: String,
     val lng: String,
     val payType: String,
+    val usePoints: Boolean = false,
 )
 
 data class UnlockSession(
@@ -106,6 +114,7 @@ class ConfirmController(
     private val locationProvider: LocationSource,
     private val settingsStore: SettingsSource,
     private val configStore: DeviceConfigSource,
+    private val pointsDeduct: PointsDeductSource = NoopPointsDeductSource,
     private val timingSink: UnlockTimingSink = NoopUnlockTimingSink,
     private val diagnostics: DiagSink = NoopDiagSink,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -131,6 +140,9 @@ class ConfirmController(
     private var unlockSucceeded = false
     private var abandonPending = false
     private var abandoned = false
+    private var deductEnabled = false
+    private var deductEligibility: PointsDeductEligibility? = null
+    private var deductDeferred: CompletableDeferred<PointsDeductEligibility>? = null
 
     fun start(device: ResolvedDevice) {
         val gen = ++generation
@@ -144,6 +156,9 @@ class ConfirmController(
         acceleration = UnlockAcceleration.Conservative
         locationSnapshot = null
         locationPhase = LocationPhase.Fetching
+        deductEnabled = false
+        deductEligibility = null
+        deductDeferred = null
         loadJob?.cancel()
         locationJob?.cancel()
         prepareTrace(device)
@@ -178,6 +193,7 @@ class ConfirmController(
                 }
 
                 launchLocation(device, gen)
+                launchDeductCheck(device, gen)
 
                 val cached = deviceRepository.readCachedPlans(device)
                 if (gen != generation) return@launch
@@ -415,6 +431,7 @@ class ConfirmController(
                 fields = mapOf(
                     "goodsId" to ready.device.scan.id,
                     "channel" to ready.channel.methodName,
+                    "usePoints" to (deductEligibility?.usable == true).toString(),
                 ),
             )
             _state.value = ConfirmState.DryRun(
@@ -427,6 +444,7 @@ class ConfirmController(
                     lat = ready.location?.lat.orEmpty(),
                     lng = ready.location?.lng.orEmpty(),
                     payType = payType,
+                    usePoints = deductEligibility?.usable == true,
                 ),
             )
             return
@@ -476,6 +494,8 @@ class ConfirmController(
             try {
                 bindStats = ensureBound(ready.channel.method)
 
+                val deduct = awaitDeduct()
+                val usePoints = deduct?.usable == true
                 val unlockStartedAt = clock()
                 val unlock = waterRepository.unlock(
                     detail = ready.device.detail,
@@ -483,6 +503,7 @@ class ConfirmController(
                     lat = location.lat,
                     lng = location.lng,
                     payType = payType,
+                    usePoints = usePoints,
                 )
                 unlockCallMs = clock() - unlockStartedAt
 
@@ -500,6 +521,7 @@ class ConfirmController(
                     put("channel", ready.channel.methodName)
                     put("channelMethod", ready.channel.method.toString())
                     put("acceleration", acceleration.name)
+                    put("pointsDeduct", if (usePoints) "on" else "off")
                     put("bindSkipped", bindStats.skipped.toString())
                     put("prebound", bindStats.prebound.toString())
                     put("bindWaitMs", bindStats.waitMs.toString())
@@ -693,6 +715,64 @@ class ConfirmController(
         }
     }
 
+    private fun launchDeductCheck(device: ResolvedDevice, gen: Int) {
+        val deferred = CompletableDeferred<PointsDeductEligibility>()
+        deductDeferred = deferred
+        scope.launch {
+            val enabled = try {
+                settingsStore.isPointsDeductEnabled()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                false
+            }
+            if (gen != generation) {
+                deferred.complete(PointsDeductEligibility.Unavailable(PointsDeductReason.Error))
+                return@launch
+            }
+            deductEnabled = enabled
+            val result = if (!enabled) {
+                PointsDeductEligibility.Unavailable(PointsDeductReason.NotSupported)
+            } else {
+                try {
+                    withTimeoutOrNull(DEDUCT_CHECK_TIMEOUT_MS) { pointsDeduct.loadEligibility() }
+                        ?: PointsDeductEligibility.Unavailable(PointsDeductReason.Error)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (_: Throwable) {
+                    PointsDeductEligibility.Unavailable(PointsDeductReason.Error)
+                }
+            }
+            if (gen != generation) {
+                deferred.complete(result)
+                return@launch
+            }
+            deductEligibility = result
+            deferred.complete(result)
+            val ready = (_state.value as? ConfirmState.Ready)?.value
+            if (ready != null && ready.device == device) {
+                _state.value = ConfirmState.Ready(ready.copy(deductEnabled = enabled, deduct = result))
+            }
+            diagnostics.event(
+                DiagLevel.Debug,
+                DiagFlow.Confirm,
+                "points_deduct_checked",
+                traceId = traceId,
+                fields = mapOf(
+                    "enabled" to enabled.toString(),
+                    "integralTotal" to (result as? PointsDeductEligibility.Available)?.integralTotal?.toString().orEmpty(),
+                    "reason" to (result as? PointsDeductEligibility.Unavailable)?.reason?.name.orEmpty(),
+                ),
+            )
+        }
+    }
+
+    private suspend fun awaitDeduct(): PointsDeductEligibility? {
+        deductEligibility?.let { return it }
+        val deferred = deductDeferred ?: return null
+        return withTimeoutOrNull(DEDUCT_WAIT_MS) { deferred.await() } ?: deductEligibility
+    }
+
     private fun launchLocation(device: ResolvedDevice, gen: Int) {
         locationJob?.cancel()
         locationJob = scope.launch {
@@ -738,10 +818,18 @@ class ConfirmController(
         val oneTap = settingsStore.isOneTapEnabled()
         val dryRun = settingsStore.isDryRun()
         val accelerationTier = settingsStore.getUnlockAcceleration()
+        val deductOn = try {
+            settingsStore.isPointsDeductEnabled()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            false
+        }
         val confirmed = configStore.find(device.scan.id)
         if (gen != generation) return false
 
         acceleration = accelerationTier
+        deductEnabled = deductOn
 
         val skuIndex = confirmed?.skuId
             ?.let { id -> skus.indexOfFirst { it.skuId == id } }
@@ -760,6 +848,8 @@ class ConfirmController(
             oneTap = oneTap,
             dryRun = dryRun,
             confirmed = confirmed != null,
+            deductEnabled = deductEnabled,
+            deduct = deductEligibility,
         )
         _state.value = ConfirmState.Ready(ready)
         if (abandoned) return true
@@ -1030,6 +1120,8 @@ class ConfirmController(
     private companion object {
         const val PLAN_REQUEST_ATTEMPTS = 2
         const val POLL_TIMEOUT_MS = 15_000L
+        const val DEDUCT_CHECK_TIMEOUT_MS = 5_000L
+        const val DEDUCT_WAIT_MS = 1_500L
 
         /** 保守：前 9 次请求覆盖约 2 秒（首轮立即，随后 8 个 250ms 间隔）。 */
         const val CONSERVATIVE_FAST_POLL_COUNT = 9
