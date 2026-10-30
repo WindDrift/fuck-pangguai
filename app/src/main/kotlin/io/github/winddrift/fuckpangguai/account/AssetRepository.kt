@@ -107,6 +107,21 @@ class AssetRepository(
         return response.data ?: ItemsList()
     }
 
+    suspend fun applyRefund(
+        shopId: String,
+        alipayAccount: String,
+        name: String,
+    ) {
+        val response = api.tokenCoinRefundApply(
+            mapOf(
+                "shopIds" to shopId,
+                "alipayAccount" to alipayAccount,
+                "name" to name,
+            ),
+        )
+        requireSuccess(response.code, response.msg)
+    }
+
     private suspend fun loadBalance(): UserBalance {
         val response = api.userBalance(emptyMap())
         requireSuccess(response.code, response.msg)

@@ -117,6 +117,10 @@ class AssetController(
         pageSize: Int = 15,
     ): ItemsList<TicketLog> = assetRepository.loadLogs(shopId, page, pageSize)
 
+    suspend fun applyRefund(shopId: String, alipayAccount: String, name: String) {
+        assetRepository.applyRefund(shopId, alipayAccount, name)
+    }
+
     private fun mergeSnapshot(previous: AssetSnapshot?, overview: AssetOverview): AssetSnapshot =
         AssetSnapshot(
             fetchedAt = System.currentTimeMillis(),

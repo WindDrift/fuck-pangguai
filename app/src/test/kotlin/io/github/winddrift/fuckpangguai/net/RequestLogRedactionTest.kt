@@ -25,4 +25,17 @@ class RequestLogRedactionTest {
         assertTrue(redacted.contains("10.00"))
         assertTrue(redacted.contains("<redacted>"))
     }
+
+    @Test
+    fun `refund form redacts alipay account and real name`() {
+        val body = "shopIds=shop-1&alipayAccount=13800138000&name=张三&applyFileList="
+
+        val redacted = redactFormBody(body)
+
+        assertFalse(redacted.contains("13800138000"))
+        assertFalse(redacted.contains("张三"))
+        assertTrue(redacted.contains("shopIds=shop-1"))
+        assertTrue(redacted.contains("alipayAccount=<redacted>"))
+        assertTrue(redacted.contains("name=<redacted>"))
+    }
 }

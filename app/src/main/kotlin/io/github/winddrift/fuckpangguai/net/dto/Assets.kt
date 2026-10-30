@@ -32,6 +32,10 @@ data class Ticket(
     val totalAmount: Int = 0,
     val principalAmount: Int = 0,
     val presentAmount: Int = 0,
+    val isAllowRefund: Int = 0,
+    val isRefundNeedFile: Int = 0,
+    val uploadFileRemark: String = "",
+    val hasProcessingRefund: Boolean = false,
 )
 
 @Serializable

@@ -153,13 +153,24 @@ class RequestLogInterceptor : Interceptor {
         }
     }
 
-    private fun redactForm(body: String): String = body.split('&').joinToString("&") { field ->
-        val name = field.substringBefore('=', missingDelimiterValue = field)
-        if (name in SENSITIVE_FIELDS) "$name=<redacted>" else field
-    }
+    private fun redactForm(body: String): String = redactFormBody(body)
 
     private companion object {
         const val MAX_RESPONSE_BYTES = 512L * 1024L
-        val SENSITIVE_FIELDS = setOf("token", "phone", "verify", "lat", "lng")
     }
+}
+
+private val SENSITIVE_FORM_FIELDS = setOf(
+    "token",
+    "phone",
+    "verify",
+    "lat",
+    "lng",
+    "alipayaccount",
+    "name",
+)
+
+internal fun redactFormBody(body: String): String = body.split('&').joinToString("&") { field ->
+    val name = field.substringBefore('=', missingDelimiterValue = field)
+    if (name.lowercase() in SENSITIVE_FORM_FIELDS) "$name=<redacted>" else field
 }
