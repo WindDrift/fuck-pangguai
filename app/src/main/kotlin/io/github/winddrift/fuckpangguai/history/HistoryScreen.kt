@@ -47,7 +47,10 @@ import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
 import io.github.winddrift.fuckpangguai.ui.format.sessionPhaseLabel
 import io.github.winddrift.fuckpangguai.water.WaterConversion
+import io.github.winddrift.fuckpangguai.water.computeUsagePace
 import io.github.winddrift.fuckpangguai.water.formatAmountWithWater
+import io.github.winddrift.fuckpangguai.water.formatUsageDuration
+import io.github.winddrift.fuckpangguai.water.formatUsagePace
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -317,6 +320,10 @@ fun HistoryScreen(
                     if (record.amount.isNotBlank()) {
                         KeyValueRow("用量", formatAmountWithWater(record.amount, waterConversion))
                     }
+                    record.usagePace(waterConversion)?.let { pace ->
+                        KeyValueRow("用时", formatUsageDuration(pace.durationMs))
+                        formatUsagePace(pace)?.let { KeyValueRow("平均", it) }
+                    }
                     if (record.displayOrderNo().isNotBlank()) {
                         KeyValueRow("订单", record.displayOrderNo())
                     }
@@ -447,6 +454,18 @@ private fun HistoryCard(
                 }
             }
 
+            record.usagePace(waterConversion)?.let { pace ->
+                val rate = formatUsagePace(pace)
+                Text(
+                    text = buildString {
+                        append("用时 ${formatUsageDuration(pace.durationMs)}")
+                        if (rate != null) append(" · 平均 $rate")
+                    },
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                )
+            }
+
             if (record.displayOrderNo().isNotBlank()) {
                 Text(
                     text = "订单 ${record.displayOrderNo()}",
@@ -472,6 +491,13 @@ private fun HistoryCard(
         }
     }
 }
+
+private fun HistoryRecord.usagePace(conversion: WaterConversion?) = computeUsagePace(
+    startedAt = startedAt,
+    endedAt = endedAt,
+    amount = amount,
+    conversion = conversion,
+)
 
 @Composable
 private fun HistoryBillBlock(

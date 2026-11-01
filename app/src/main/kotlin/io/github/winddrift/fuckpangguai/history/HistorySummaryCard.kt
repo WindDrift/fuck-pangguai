@@ -89,8 +89,13 @@ internal fun HistorySummaryCard(
                 )
             }
 
+            PreferenceDivider()
+
+            FlowMetric(summary = summary)
+
             Text(
-                text = "总花费按已支付且已匹配账单的原价，排除退款；总用量只汇总纯数字，未标单位。",
+                text = "总花费按已支付且已匹配账单的原价，排除退款；总用量只汇总纯数字，未标单位；" +
+                    "平均流速按有结算用时的记录合计。",
                 style = MiuixTheme.textStyles.footnote1,
                 color = colors.onSurfaceSecondary,
             )
@@ -140,9 +145,14 @@ internal fun HistorySummaryCard(
                 )
             }
 
+            PreferenceDivider()
+
+            FlowMetric(summary = summary)
+
             Text(
                 text = "总花费按已支付且已匹配账单的原价，排除退款；总用量只汇总纯数字；" +
-                    "总水量包含纯数字换算与带 L/mL 的记录；平均单价分别按各自口径计算。",
+                    "总水量包含纯数字换算与带 L/mL 的记录；平均单价分别按各自口径计算；" +
+                    "平均流速按有结算用时的记录合计。",
                 style = MiuixTheme.textStyles.footnote1,
                 color = colors.onSurfaceSecondary,
             )
@@ -209,6 +219,34 @@ private fun usageCoverageText(summary: HistorySummary): String =
         "纯数字 ${summary.usageCoverage}/${summary.visibleCount} 笔 · " +
             "水量 ${summary.waterCoverage}/${summary.visibleCount} 笔"
     }
+
+@Composable
+private fun FlowMetric(summary: HistorySummary) {
+    val colors = MiuixTheme.colorScheme
+    val flow = formatSummaryFlow(summary)
+    val hasFlow = summary.flowUsagePerSecond != null || summary.flowMlPerSecond != null
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = "平均流速",
+            style = MiuixTheme.textStyles.footnote1,
+            color = colors.onSurfaceSecondary,
+        )
+        Text(
+            text = flow,
+            style = MiuixTheme.textStyles.body1,
+            color = if (hasFlow) colors.primary else colors.onSurfaceSecondary,
+        )
+        Text(
+            text = if (summary.paceCoverage > 0) {
+                "合计口径 · 可计时 ${summary.paceCoverage}/${summary.visibleCount} 笔"
+            } else {
+                "暂无可计时记录"
+            },
+            style = MiuixTheme.textStyles.footnote1,
+            color = colors.onSurfaceSecondary,
+        )
+    }
+}
 
 private fun averageCoverageText(summary: HistorySummary): String =
     if (summary.averageCoverage == summary.waterAverageCoverage) {

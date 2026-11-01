@@ -158,6 +158,60 @@ class HistorySummaryTest {
     }
 
     @Test
+    fun `flow uses total usage and water over their recorded durations`() {
+        val records = listOf(
+            record(amount = "100", startedAt = 1_000, endedAt = 11_000),
+            record(amount = "200", startedAt = 20_000, endedAt = 40_000),
+            record(amount = "300"),
+        )
+        val conversion = WaterConversion(
+            usageBase = BigDecimal("100"),
+            waterMl = BigDecimal("500"),
+        )
+
+        val summary = records.summarizeHistory(conversion)
+
+        assertEquals(2, summary.paceCoverage)
+        assertEquals(0, summary.flowUsagePerSecond!!.compareTo(BigDecimal("10")))
+        assertEquals(0, summary.flowMlPerSecond!!.compareTo(BigDecimal("50")))
+        assertEquals("10 用量/秒 · 50 mL/秒", formatSummaryFlow(summary))
+    }
+
+    @Test
+    fun `flow duration follows each metric's coverage`() {
+        val records = listOf(
+            record(amount = "100", startedAt = 1_000, endedAt = 11_000),
+            record(amount = "1.2L", startedAt = 20_000, endedAt = 40_000),
+        )
+        val conversion = WaterConversion(
+            usageBase = BigDecimal("100"),
+            waterMl = BigDecimal("500"),
+        )
+
+        val summary = records.summarizeHistory(conversion)
+
+        assertEquals(2, summary.paceCoverage)
+        assertEquals(0, summary.flowUsagePerSecond!!.compareTo(BigDecimal("10")))
+        assertEquals(0, summary.flowMlPerSecond!!.compareTo(BigDecimal("56.6667")))
+        assertEquals("10 用量/秒 · 56.7 mL/秒", formatSummaryFlow(summary))
+    }
+
+    @Test
+    fun `records without usable settlement time are excluded from flow`() {
+        val records = listOf(
+            record(amount = "100", startedAt = 1_000, endedAt = 0),
+            record(amount = "100", startedAt = 1_000, endedAt = 1_050),
+        )
+
+        val summary = records.summarizeHistory()
+
+        assertEquals(0, summary.paceCoverage)
+        assertNull(summary.flowUsagePerSecond)
+        assertNull(summary.flowMlPerSecond)
+        assertEquals("—", formatSummaryFlow(summary))
+    }
+
+    @Test
     fun `pure usage parser rejects units commas negatives and exponents`() {
         listOf("1.5", " 1.5 ", ".5", "0", "12").forEach { value ->
             assertTrue("expected valid: $value", parsePureUsage(value) != null)
@@ -191,6 +245,8 @@ class HistorySummaryTest {
         amount: String,
         billState: BillState = BillState.MATCHED,
         bill: BillInfo? = bill(),
+        startedAt: Long = 1_000,
+        endedAt: Long = 0,
     ): HistoryRecord = HistoryRecord(
         id = 1,
         accountId = "account",
@@ -204,8 +260,9 @@ class HistorySummaryTest {
         identify = "",
         phase = SessionPhase.PAID,
         error = "",
-        startedAt = 1_000,
+        startedAt = startedAt,
         updatedAt = 2_000,
+        endedAt = endedAt,
         billState = billState,
         bill = bill,
         billError = "",

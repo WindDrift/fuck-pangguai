@@ -24,6 +24,7 @@ data class HistoryRecord(
     val error: String,
     val startedAt: Long,
     val updatedAt: Long,
+    val endedAt: Long = 0L,
     val billState: BillState,
     val bill: BillInfo?,
     val billError: String,
@@ -55,6 +56,7 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
                 error TEXT NOT NULL,
                 started_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL,
+                ended_at INTEGER NOT NULL DEFAULT 0,
                 bill_state TEXT NOT NULL DEFAULT 'none',
                 bill_json TEXT NOT NULL DEFAULT '',
                 bill_error TEXT NOT NULL DEFAULT '',
@@ -84,6 +86,9 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
             db.execSQL("ALTER TABLE $TABLE ADD COLUMN bill_error TEXT NOT NULL DEFAULT ''")
             db.execSQL("ALTER TABLE $TABLE ADD COLUMN bill_fetched_at INTEGER NOT NULL DEFAULT 0")
         }
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE $TABLE ADD COLUMN ended_at INTEGER NOT NULL DEFAULT 0")
+        }
     }
 
     fun upsert(session: WaterSession, accountId: String): Long {
@@ -104,6 +109,7 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
             put("error", session.error)
             put("started_at", session.startedAt)
             put("updated_at", session.updatedAt)
+            put("ended_at", session.endedAt)
         }
         val existingId = readableDatabase.query(
             TABLE,
@@ -200,6 +206,7 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
                     error = cursor.getString(cursor.getColumnIndexOrThrow("error")),
                     startedAt = cursor.getLong(cursor.getColumnIndexOrThrow("started_at")),
                     updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")),
+                    endedAt = cursor.getLong(cursor.getColumnIndexOrThrow("ended_at")),
                     billState = BillState.fromStorage(
                         cursor.getString(cursor.getColumnIndexOrThrow("bill_state")),
                     ),
@@ -293,7 +300,7 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
 
     private companion object {
         const val DB_NAME = "pangguai_history.db"
-        const val DB_VERSION = 3
+        const val DB_VERSION = 4
         const val TABLE = "water_history"
     }
 }

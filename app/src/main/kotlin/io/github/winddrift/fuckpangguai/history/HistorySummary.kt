@@ -1,9 +1,12 @@
 package io.github.winddrift.fuckpangguai.history
 
+import io.github.winddrift.fuckpangguai.water.MIN_USAGE_PACE_DURATION_MS
 import io.github.winddrift.fuckpangguai.water.WaterConversion
 import io.github.winddrift.fuckpangguai.water.formatCupCount
+import io.github.winddrift.fuckpangguai.water.formatFlowRates
 import io.github.winddrift.fuckpangguai.water.formatWaterVolume
 import io.github.winddrift.fuckpangguai.water.parsePureUsage
+import io.github.winddrift.fuckpangguai.water.usagePaceDurationMs
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -19,6 +22,10 @@ internal data class HistorySummary(
     val waterAverageCoverage: Int = 0,
     val totalWaterMl: BigDecimal? = null,
     val waterPerYuanMl: BigDecimal? = null,
+    /** 有可信结算用时的记录数。 */
+    val paceCoverage: Int = 0,
+    val flowUsagePerSecond: BigDecimal? = null,
+    val flowMlPerSecond: BigDecimal? = null,
 )
 
 internal fun List<HistoryRecord>.summarizeHistory(
@@ -36,6 +43,11 @@ internal fun List<HistoryRecord>.summarizeHistory(
     var sameUsage = BigDecimal.ZERO
     var sameWaterSpend = BigDecimal.ZERO
     var sameWaterMl = BigDecimal.ZERO
+    var paceCoverage = 0
+    var usagePaceDurationMs = 0L
+    var usagePaceTotal = BigDecimal.ZERO
+    var waterPaceDurationMs = 0L
+    var waterPaceTotal = BigDecimal.ZERO
 
     forEach { record ->
         val original = record.countedOriginalAmount()
@@ -62,6 +74,18 @@ internal fun List<HistoryRecord>.summarizeHistory(
             waterAverageCoverage++
             sameWaterSpend = sameWaterSpend.add(original)
             sameWaterMl = sameWaterMl.add(volume)
+        }
+        val paceDurationMs = usagePaceDurationMs(record.startedAt, record.endedAt)
+        if (paceDurationMs != null) {
+            paceCoverage++
+            if (usage != null) {
+                usagePaceDurationMs += paceDurationMs
+                usagePaceTotal = usagePaceTotal.add(usage)
+            }
+            if (volume != null) {
+                waterPaceDurationMs += paceDurationMs
+                waterPaceTotal = waterPaceTotal.add(volume)
+            }
         }
     }
 
@@ -94,7 +118,18 @@ internal fun List<HistoryRecord>.summarizeHistory(
         totalWaterMl = totalWaterMl.takeIf { waterCoverage > 0 },
         usagePerYuan = average,
         waterPerYuanMl = waterAverage,
+        paceCoverage = paceCoverage,
+        flowUsagePerSecond = flowRate(usagePaceTotal, usagePaceDurationMs),
+        flowMlPerSecond = flowRate(waterPaceTotal, waterPaceDurationMs),
     )
+}
+
+/** 合计口径：总用量/总水量 ÷ 各自可计时记录的用时合计；旧记录不参与。 */
+private fun flowRate(total: BigDecimal, durationMs: Long): BigDecimal? {
+    if (total <= BigDecimal.ZERO || durationMs < MIN_USAGE_PACE_DURATION_MS) return null
+    val seconds = BigDecimal(durationMs)
+        .divide(THOUSAND, FLOW_SCALE, RoundingMode.HALF_UP)
+    return total.divide(seconds, FLOW_SCALE, RoundingMode.HALF_UP)
 }
 
 internal fun formatSummaryMoney(value: BigDecimal?): String =
@@ -109,6 +144,9 @@ internal fun formatSummaryUsage(value: BigDecimal?): String {
     }
     return rounded.stripTrailingZeros().toPlainString()
 }
+
+internal fun formatSummaryFlow(summary: HistorySummary): String =
+    formatFlowRates(summary.flowUsagePerSecond, summary.flowMlPerSecond) ?: "—"
 
 internal fun formatSummaryAverage(
     usagePerYuan: BigDecimal?,
@@ -133,3 +171,6 @@ private fun HistoryRecord.countedOriginalAmount(): BigDecimal? {
     if (bill.orderStatus != 2 && bill.orderStatus != 3) return null
     return parseAmount(bill.originalAmount)?.takeIf { it >= BigDecimal.ZERO }
 }
+
+private val THOUSAND = BigDecimal(1000)
+private const val FLOW_SCALE = 4
