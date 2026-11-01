@@ -21,6 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +40,11 @@ import io.github.winddrift.fuckpangguai.ui.format.sessionStatusLabel
 import io.github.winddrift.fuckpangguai.water.SessionPhase
 import io.github.winddrift.fuckpangguai.water.WaterConversion
 import io.github.winddrift.fuckpangguai.water.WaterSession
+import io.github.winddrift.fuckpangguai.water.computeUsagePace
 import io.github.winddrift.fuckpangguai.water.formatConvertedWater
+import io.github.winddrift.fuckpangguai.water.formatUsageDuration
+import io.github.winddrift.fuckpangguai.water.formatUsagePace
+import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -52,6 +58,39 @@ fun UsingScreen(
     val terminal = session.phase in SessionPhase.TERMINAL
     val waterDetail = remember(session.amount, waterConversion) {
         formatConvertedWater(session.amount, waterConversion)
+    }
+    val now by produceState(
+        initialValue = System.currentTimeMillis(),
+        session.startedAt,
+        terminal,
+    ) {
+        if (!terminal) {
+            while (true) {
+                value = System.currentTimeMillis()
+                delay(100)
+            }
+        }
+    }
+    val elapsedUntil = if (terminal) {
+        session.endedAt.takeIf { it > 0L } ?: session.updatedAt
+    } else {
+        now
+    }
+    val elapsedMs = (elapsedUntil - session.startedAt).coerceAtLeast(0L)
+    val settledPace = remember(session.startedAt, session.endedAt, session.amount, waterConversion, terminal) {
+        if (terminal) {
+            computeUsagePace(
+                startedAt = session.startedAt,
+                endedAt = session.endedAt,
+                amount = session.amount,
+                conversion = waterConversion,
+            )
+        } else {
+            null
+        }
+    }
+    val settledPaceText = remember(settledPace) {
+        settledPace?.let { formatUsagePace(it) }
     }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -98,6 +137,23 @@ fun UsingScreen(
             if (waterDetail != null) {
                 Text(
                     text = waterDetail,
+                    style = MiuixTheme.textStyles.body1,
+                    color = colors.onSurfaceSecondary,
+                )
+            }
+            Text(
+                text = if (terminal) "本次用时" else "已用时间",
+                style = MiuixTheme.textStyles.footnote1,
+                color = colors.onSurfaceSecondary,
+            )
+            Text(
+                text = formatUsageDuration(elapsedMs),
+                style = MiuixTheme.textStyles.title3,
+                color = colors.onSurface,
+            )
+            if (settledPaceText != null) {
+                Text(
+                    text = "平均 $settledPaceText",
                     style = MiuixTheme.textStyles.body1,
                     color = colors.onSurfaceSecondary,
                 )
