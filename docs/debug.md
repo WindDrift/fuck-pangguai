@@ -88,7 +88,7 @@ NFC 标签管理已移至「设置 → 使用 → 管理 NFC 标签」，诊断�
 6. 结束接水（用户结束或设备结束；记录用水时长与结束操作耗时）
 7. 结算支付（结算单、afterPayCreate 与 pay_status 轮询）
 
-页面支持按设备/goodsId/traceId、结果与时间筛选。统计卡按阶段显示成功/失败/放弃/进行中、平均与最大耗时、参与 trace 数与平均尝试次数；未到达的阶段不计入平均。每条 trace 可展开查看阶段结果、错误与字段。
+页面支持按设备/goodsId/traceId、结果与时间筛选。统计卡按阶段显示成功/失败/放弃/未到达/进行中、平均与最大耗时、参与 trace 数与平均尝试次数；未到达表示该 trace 从未进入这一阶段，与阶段被放弃分开计数，且不计入平均耗时。每条 trace 可展开查看阶段结果、错误与字段。
 
 总耗时是墙钟全链路（含用户操作间隔与用水时长），不等于各阶段耗时之和。进行中的 trace 显示“进行中”；进程中断或超过 10 分钟未更新的 trace 在下次启动时标为“中断”。
 
@@ -110,8 +110,10 @@ NFC 标签管理已移至「设置 → 使用 → 管理 NFC 标签」，诊断�
 - 应用启动（版本/buildType）、前台/后台、登录/切换/退出、会话失效。
 - 扫码来源、解码耗时、设备解析、NFC 绑定、套餐缓存命中/刷新、定位结果。
 - 确认页 Ready/Blocked/Error、缓存来源、预绑定/补绑、unlock、msgSync 次数与同步来源、解锁加速档位、一键解锁、演练、放弃。
+- 解锁超时对账：`unlock_timeout_pending`（订单待核对）、`unlock_reconcile_adopt`（已接管）、`unlock_reconcile_adopt_deferred`（页面已离开，推迟接管）、`unlock_reconcile_give_up`（本轮放弃，记录保留）、`unlock_reconcile_blocked`（拦截重复解锁）、`unlock_reconcile_abandoned`（用户显式放弃）、`unlock_pending_expired`（对账循环中判定过期）。
 - 会话创建/恢复、每次 waterSync 摘要、出水确认、用户结束、设备结束、故障、结算决策、afterPayCreate、支付结果与终态。
-- 网络请求摘要：方法、路径、状态码、耗时与脱敏响应预览；核心请求成功记 Info，轮询类成功记 Debug，失败记 Warn/Error。
+- 网络请求摘要：方法、路径、状态码、耗时与脱敏响应预览；核心请求成功记 Info，轮询类成功记 Debug，客户端取消记 Debug，超时与连接失败记 Warn，未知异常与 5xx 记 Error。
+- 网络事件的筛选字段：`bytes`（预览读取字节数）、`truncated=true`（预览被截断）、`canceled=true`（客户端主动取消）、`timeout=true`（超时）。
 - 未处理异常堆栈与崩溃时的当前 trace。
 
 不记录的内容：
@@ -120,7 +122,9 @@ NFC 标签管理已移至「设置 → 使用 → 管理 NFC 标签」，诊断�
 - 原始二维码、SN/IMEI、坐标、token、手机号。
 - 逐帧相机数据与逐条历史明细。
 
-响应中的 `token/phone/realName/idCardNo/imei/sn/qrCode/lat/lng/password/verifyCode` 等字段会替换为 `<redacted>`；非 JSON 响应不保存原文。设备只保留名称与 goodsId，账号只保留本地 localId；订单号、msgId、identify 等保留用于关联，导出前会再次提示。
+响应中的 `token/phone/realName/idCardNo/imei/sn/qrCode/lat/lng/password/verifyCode` 等字段会替换为 `<redacted>`；非 JSON 响应不保存原文，被预览上限截断的 JSON 只记「已截断的 JSON 响应」与字节数，不保存片段。
+
+解锁对账事件新增的字段只有 `orderNo`、`polls`、`probes`、`waitedMs`、`pendingAgeMs`、`source`；网络事件新增的 `bytes`/`truncated`/`canceled`/`timeout` 是计数、布尔与毫秒数，均不含原文。设备只保留名称与 goodsId，账号只保留本地 localId；订单号、msgId、identify 等保留用于关联，导出前会再次提示。
 
 请求体与请求头不会落盘；cURL 视图只在 Debug/诊断构建的内存中保留，退出进程即丢失。
 
