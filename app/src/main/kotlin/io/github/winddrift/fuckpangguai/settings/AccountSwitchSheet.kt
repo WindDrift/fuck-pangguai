@@ -29,7 +29,10 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -180,52 +183,30 @@ private fun AccountRow(
     onDelete: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AccountAvatar(
-            name = displayName(account),
-            avatarUrl = account.avatarUrl,
-            size = 40.dp,
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = displayName(account),
-                    style = MiuixTheme.textStyles.body1,
-                )
-                when {
-                    account.loggedOut -> Text(
-                        text = "已退出",
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = colors.onSurfaceSecondary,
-                    )
-
-                    account.invalid -> Text(
-                        text = "已失效",
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = colors.error,
-                    )
-
-                    active -> Text(
-                        text = "当前",
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = colors.primary,
-                    )
-                }
-            }
-            Text(
-                text = account.phoneMasked.ifBlank { "未同步手机号" },
-                style = MiuixTheme.textStyles.footnote1,
-                color = colors.onSurfaceSecondary,
-            )
-        }
-        TextButton(text = "改名", onClick = onRename)
-        TextButton(text = "删除", onClick = onDelete)
+    val statusText = when {
+        account.loggedOut -> "已退出"
+        account.invalid -> "已失效"
+        active -> "当前"
+        else -> null
     }
+    ArrowPreference(
+        title = displayName(account),
+        summary = buildString {
+            statusText?.let { append(it).append(" · ") }
+            append(account.phoneMasked.ifBlank { "未同步手机号" })
+        },
+        onClick = onSelect,
+        startAction = {
+            AccountAvatar(
+                name = displayName(account),
+                avatarUrl = account.avatarUrl,
+                size = 40.dp,
+            )
+            Spacer(Modifier.width(12.dp))
+        },
+        endActions = {
+            TextButton(text = "改名", onClick = onRename)
+            TextButton(text = "删除", onClick = onDelete)
+        },
+    )
 }

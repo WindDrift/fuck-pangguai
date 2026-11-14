@@ -44,7 +44,10 @@ import io.github.winddrift.fuckpangguai.account.AuthTarget
 import io.github.winddrift.fuckpangguai.account.StoredAccount
 import io.github.winddrift.fuckpangguai.account.displayName
 import io.github.winddrift.fuckpangguai.debug.DebugTokenImportSection
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import io.github.winddrift.fuckpangguai.ui.components.AccountAvatar
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -53,6 +56,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -85,6 +89,8 @@ fun LoginScreen(
         is AuthTarget.Reauth -> "重新登录"
         AuthTarget.None -> stringResource(R.string.app_name)
     }
+    val phoneInvalid = phone.isNotBlank() && phone.length != 11
+    val codeInvalid = code.isNotBlank() && code.length != 6
     val subtitle = when (target) {
         AuthTarget.AddAccount -> "登录另一个胖乖生活账号，当前账号会保留。"
         is AuthTarget.Reauth -> "该账号的登录已失效，请重新验证手机号。"
@@ -193,6 +199,10 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                     label = "手机号",
                     singleLine = true,
+                    colors = TextFieldDefaults.textFieldColors(
+                        labelColor = if (phoneInvalid) colors.error else colors.onSurfaceSecondary,
+                        borderColor = if (phoneInvalid) colors.error else colors.outline,
+                    ),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Phone,
                         imeAction = ImeAction.Next,
@@ -207,6 +217,10 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                     label = "验证码",
                     singleLine = true,
+                    colors = TextFieldDefaults.textFieldColors(
+                        labelColor = if (codeInvalid) colors.error else colors.onSurfaceSecondary,
+                        borderColor = if (codeInvalid) colors.error else colors.outline,
+                    ),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done,
@@ -264,42 +278,25 @@ private fun SavedAccountRow(
     onSelect: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AccountAvatar(
-            name = displayName(account),
-            avatarUrl = account.avatarUrl,
-            size = 40.dp,
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = displayName(account),
-                style = MiuixTheme.textStyles.body1,
-            )
-            Text(
-                text = account.phoneMasked.ifBlank { "未同步手机号" },
-                style = MiuixTheme.textStyles.footnote1,
-                color = colors.onSurfaceSecondary,
-            )
-        }
-        when {
-            account.invalid -> Text(
-                text = "已失效",
-                style = MiuixTheme.textStyles.footnote1,
-                color = colors.error,
-            )
-
-            active -> Text(
-                text = "当前",
-                style = MiuixTheme.textStyles.footnote1,
-                color = colors.primary,
-            )
-        }
+    val statusText = when {
+        account.invalid -> "已失效"
+        active -> "当前"
+        else -> null
     }
+    ArrowPreference(
+        title = displayName(account),
+        summary = buildString {
+            statusText?.let { append(it).append(" · ") }
+            append(account.phoneMasked.ifBlank { "未同步手机号" })
+        },
+        onClick = onSelect,
+        startAction = {
+            AccountAvatar(
+                name = displayName(account),
+                avatarUrl = account.avatarUrl,
+                size = 40.dp,
+            )
+            Spacer(Modifier.width(12.dp))
+        },
+    )
 }

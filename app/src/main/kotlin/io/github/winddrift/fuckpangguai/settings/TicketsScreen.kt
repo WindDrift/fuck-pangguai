@@ -1,6 +1,5 @@
 package io.github.winddrift.fuckpangguai.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -47,10 +46,12 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Promotions
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -254,47 +255,20 @@ private fun TicketShopCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = ticket.shopId.isNotBlank(), onClick = onClick),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = ticket.shopName.ifBlank { "未知店铺" },
-                        style = MiuixTheme.textStyles.title3,
+            ArrowPreference(
+                title = ticket.shopName.ifBlank { "未知店铺" },
+                summary = "本金 ¥${pointsToYuan(ticket.principalAmount)} · " +
+                    "赠送 ¥${pointsToYuan(ticket.presentAmount)} · 合计 ¥${pointsToYuan(ticket.totalAmount)}",
+                onClick = onClick,
+                enabled = ticket.shopId.isNotBlank(),
+                endActions = {
+                    TextButton(
+                        text = "充值",
+                        onClick = onRecharge,
+                        enabled = ticket.shopId.isNotBlank(),
                     )
-                    Text(
-                        text = "本金 ¥${pointsToYuan(ticket.principalAmount)} · " +
-                            "赠送 ¥${pointsToYuan(ticket.presentAmount)}",
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = colors.onSurfaceSecondary,
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "¥${pointsToYuan(ticket.totalAmount)}",
-                        style = MiuixTheme.textStyles.body1,
-                    )
-                    Text(
-                        text = "${ticket.totalAmount} 点",
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = colors.onSurfaceSecondary,
-                    )
-                }
-                TextButton(
-                    text = "充值",
-                    onClick = onRecharge,
-                    enabled = ticket.shopId.isNotBlank(),
-                )
-                Icon(
-                    imageVector = MiuixIcons.ChevronForward,
-                    contentDescription = null,
-                    tint = colors.onSurfaceSecondary,
-                )
-            }
+                },
+            )
 
             if (ticket.hasProcessingRefund || ticket.isAllowRefund != 0) {
                 Row(
@@ -377,6 +351,18 @@ private fun TicketRefundSheet(
                 modifier = Modifier.fillMaxWidth(),
                 label = "支付宝账号（手机号）",
                 singleLine = true,
+                colors = TextFieldDefaults.textFieldColors(
+                    labelColor = if (account.isNotBlank() && account.length != 11) {
+                        colors.error
+                    } else {
+                        colors.onSurfaceSecondary
+                    },
+                    borderColor = if (account.isNotBlank() && account.length != 11) {
+                        colors.error
+                    } else {
+                        colors.outline
+                    },
+                ),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Phone,
                     imeAction = ImeAction.Next,
