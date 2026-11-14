@@ -7,6 +7,8 @@ import io.github.winddrift.fuckpangguai.net.dto.IntegralLimitRuleDto
 import io.github.winddrift.fuckpangguai.net.dto.IntegralTaskDto
 import io.github.winddrift.fuckpangguai.net.dto.SignInActDto
 import io.github.winddrift.fuckpangguai.net.requireSuccess
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 
 interface PointsDataSource {
     suspend fun loadBalance(): String
@@ -15,7 +17,8 @@ interface PointsDataSource {
     suspend fun signIn(activityId: String)
     suspend fun loadTasks(): List<IntegralTaskDto>
     suspend fun queryTask(taskCode: String): IntegralTaskDto
-    suspend fun completeTask(taskCode: String, subtaskCode: String?)
+    /** 返回 true 仅当服务端确认记账（code == 0 且 data == true）。 */
+    suspend fun completeTask(taskCode: String, subtaskCode: String?): Boolean
     suspend fun isCaptchaRequired(): Boolean
 }
 
@@ -70,13 +73,17 @@ class QiekjPointsRepository(
         return response.data ?: throw ApiException(-1, "任务不存在")
     }
 
-    override suspend fun completeTask(taskCode: String, subtaskCode: String?) {
+    override suspend fun completeTask(taskCode: String, subtaskCode: String?): Boolean {
         val body = buildMap {
             put("taskCode", taskCode)
             if (!subtaskCode.isNullOrBlank()) put("subtaskCode", subtaskCode)
         }
         val response = api.taskCompleted(body)
         requireSuccess(response.code, response.msg)
+        // 服务端返回 code=0 但 data=false 时任务并没有真正记账，不能算完成。
+        return response.data?.let { payload ->
+            (payload as? JsonPrimitive)?.booleanOrNull == true
+        } ?: false
     }
 
     override suspend fun isCaptchaRequired(): Boolean {

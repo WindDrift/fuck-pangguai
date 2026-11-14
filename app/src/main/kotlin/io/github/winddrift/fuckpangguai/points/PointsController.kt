@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import java.io.IOException
 import java.time.Clock
 import java.time.LocalDate
 import kotlin.random.Random
@@ -305,7 +304,13 @@ class PointsController(
                 return
             }
             delay(jitter())
-            dataSource.completeTask(taskCode, subtaskCode)
+            val confirmed = dataSource.completeTask(taskCode, subtaskCode)
+            if (!confirmed) {
+                updateIfActive(accountId) {
+                    it.copy(error = "任务未完成（服务端未确认）：$taskCode")
+                }
+                return
+            }
             onPointsChanged()
             loadPage(accountId)
         } catch (cancellation: CancellationException) {
@@ -607,17 +612,24 @@ class PointsController(
             if (browseDelay) delay(browseDelay()) else delay(jitter())
             return try {
                 counters.attempted += 1
-                dataSource.completeTask(taskCode, subtaskCode)
-                counters.completed += 1
-                networkErrors = 0
-                log(PointsLogLevel.Success, "任务完成：$taskCode")
-                true
+                val confirmed = dataSource.completeTask(taskCode, subtaskCode)
+                if (confirmed) {
+                    counters.completed += 1
+                    networkErrors = 0
+                    log(PointsLogLevel.Success, "任务完成：$taskCode")
+                    true
+                } else {
+                    // 服务端 code=0 但 data=false：本轮不再重复尝试同一任务。
+                    counters.skipped += 1
+                    log(PointsLogLevel.Warning, "任务未完成（服务端未确认）：$taskCode")
+                    false
+                }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (throwable: Throwable) {
                 if (isAuthExpired(throwable)) throw throwable
                 counters.skipped += 1
-                if (throwable is IOException) networkErrors += 1
+                if (isNetworkFailure(throwable)) networkErrors += 1
                 log(PointsLogLevel.Warning, "任务失败：$taskCode（${throwable.userMessage()}）")
                 if (networkErrors >= MAX_NETWORK_ERRORS) {
                     log(PointsLogLevel.Error, "连续网络错误，停止任务阶段")

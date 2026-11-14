@@ -17,7 +17,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -230,6 +233,56 @@ class PointsControllerTest {
         assertFalse(controller.state.value.running)
     }
 
+    @Test
+    fun `server false data is not counted as completed`() = runTest {
+        val deps = Deps()
+        deps.settings.auto.value = true
+        deps.settings.launch.value = true
+        deps.data.completeTaskResult = false
+        deps.data.queryTaskHandler = { code ->
+            if (code == PointsTaskPolicy.HOME_BROWSE_TASK_CODE) homeTask() else null
+        }
+        val controller = deps.controller(this)
+        advanceUntilIdle()
+
+        controller.onAppForeground()
+        advanceUntilIdle()
+
+        val lastRun = controller.state.value.lastRun!!
+        assertEquals(0, lastRun.completed)
+        assertTrue(lastRun.skipped >= 1)
+        assertEquals(1, deps.data.completed.size)
+        assertTrue(lastRun.logs.any { it.message.contains("服务端未确认") })
+    }
+
+    @Test
+    fun `three 405 responses stop the task phase`() = runTest {
+        val deps = Deps()
+        deps.settings.auto.value = true
+        deps.settings.launch.value = true
+        deps.settings.experiment.value = true
+        deps.data.tasks = listOf(
+            directTask("direct-1"),
+            directTask("direct-2"),
+            directTask("direct-3"),
+            directTask("direct-4"),
+        )
+        deps.data.queryTaskHandler = { null }
+        deps.data.completeTaskError = HttpException(
+            Response.error<Any>(405, "".toResponseBody(null)),
+        )
+        val controller = deps.controller(this)
+        advanceUntilIdle()
+
+        controller.onAppForeground()
+        advanceUntilIdle()
+
+        val lastRun = controller.state.value.lastRun!!
+        assertEquals(0, lastRun.completed)
+        assertEquals(3, lastRun.attempted)
+        assertTrue(lastRun.logs.any { it.message.contains("连续网络错误") })
+    }
+
     private fun homeTask() = IntegralTaskDto(
         taskCode = PointsTaskPolicy.HOME_BROWSE_TASK_CODE,
         taskType = JsonPrimitive(-1),
@@ -358,8 +411,13 @@ class PointsControllerTest {
         override suspend fun queryTask(taskCode: String): IntegralTaskDto =
             queryTaskHandler?.invoke(taskCode) ?: throw ApiException(404, "任务不存在")
 
-        override suspend fun completeTask(taskCode: String, subtaskCode: String?) {
+        var completeTaskError: Throwable? = null
+        var completeTaskResult = true
+
+        override suspend fun completeTask(taskCode: String, subtaskCode: String?): Boolean {
             completed += taskCode to subtaskCode
+            completeTaskError?.let { throw it }
+            return completeTaskResult
         }
 
         override suspend fun isCaptchaRequired(): Boolean = captcha
