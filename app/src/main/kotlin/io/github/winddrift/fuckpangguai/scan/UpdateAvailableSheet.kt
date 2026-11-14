@@ -20,7 +20,8 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
+import io.github.winddrift.fuckpangguai.ui.components.rememberLastNonNull
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -29,17 +30,18 @@ fun UpdateAvailableSheet(
     update: UpdateState.Available?,
     onDismiss: () -> Unit,
 ) {
-    if (update == null) return
+    val sheetUpdate = rememberLastNonNull(update)
 
     val context = LocalContext.current
     val snackbar = LocalSnackbar.current
     val colors = MiuixTheme.colorScheme
 
-    OverlayBottomSheet(
-        show = show,
-        title = "发现新版本 v${update.version}",
+    WindowBottomSheet(
+        show = show && update != null,
+        title = sheetUpdate?.let { "发现新版本 v${it.version}" }.orEmpty(),
         onDismissRequest = onDismiss,
     ) {
+        sheetUpdate?.let { update ->
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -81,6 +83,7 @@ fun UpdateAvailableSheet(
                     Text("前往 Release")
                 }
             }
+        }
         }
     }
 }
