@@ -129,9 +129,10 @@ fun HistoryScreen(
     }
 
     PullToRefresh(
-        isRefreshing = state.loading || state.syncing,
+        isRefreshing = state.loading,
         onRefresh = { controller.refresh(accountId, includeOld = true) },
         topAppBarScrollBehavior = scrollBehavior,
+        refreshTexts = listOf("下拉刷新", "松开刷新", "正在刷新…", "刷新完成"),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             HistoryFilterHeader(
