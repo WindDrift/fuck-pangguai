@@ -42,18 +42,7 @@ class WaterSessionManager(
 
     fun start(unlocked: UnlockSession) {
         scope.launch {
-            val session = WaterSession(
-                goodsId = unlocked.device.scan.id,
-                skuId = unlocked.sku.skuId,
-                deviceName = unlocked.device.detail.name.ifBlank { "饮水机" },
-                imei = unlocked.device.detail.imei,
-                orderNo = unlocked.unlock.orderNo,
-                msgId = unlocked.unlock.msgId,
-                supportAppUserFinish = unlocked.device.detail.supportAppUserFinish,
-                startedAt = System.currentTimeMillis(),
-                accountId = accountStore.activeLocalId().orEmpty(),
-                traceId = unlocked.traceId,
-            )
+            val session = unlocked.toWaterSession(accountStore.activeLocalId().orEmpty())
             store.save(session)
             diagnostics.event(
                 DiagLevel.Info,
@@ -70,6 +59,20 @@ class WaterSessionManager(
             WaterSyncService.start(context, session)
         }
     }
+
+    /** 对账接管的会话与正常解锁创建的会话字段必须一致，因此共用同一份构造逻辑。 */
+    private fun UnlockSession.toWaterSession(accountId: String): WaterSession = WaterSession(
+        goodsId = device.scan.id,
+        skuId = sku.skuId,
+        deviceName = device.detail.name.ifBlank { "饮水机" },
+        imei = device.detail.imei,
+        orderNo = unlock.orderNo,
+        msgId = unlock.msgId,
+        supportAppUserFinish = device.detail.supportAppUserFinish,
+        startedAt = System.currentTimeMillis(),
+        accountId = accountId,
+        traceId = traceId,
+    )
 
     fun end() {
         val current = store.session.value

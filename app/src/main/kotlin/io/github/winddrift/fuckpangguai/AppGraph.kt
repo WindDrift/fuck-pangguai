@@ -13,6 +13,7 @@ import io.github.winddrift.fuckpangguai.net.SignInterceptor
 import io.github.winddrift.fuckpangguai.storage.DisclaimerStore
 import io.github.winddrift.fuckpangguai.ticket.AccountStoreTicketSource
 import io.github.winddrift.fuckpangguai.ticket.DataStorePendingRechargeStore
+import io.github.winddrift.fuckpangguai.water.DataStorePendingUnlockStore
 import io.github.winddrift.fuckpangguai.ticket.QiekjTicketRechargeRepository
 import io.github.winddrift.fuckpangguai.ticket.TicketRechargeController
 import io.github.winddrift.fuckpangguai.device.DeviceRepository
@@ -49,6 +50,7 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import io.github.winddrift.fuckpangguai.core.AppConfig
 import io.github.winddrift.fuckpangguai.net.QiekjSigner
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
@@ -83,6 +85,7 @@ class AppGraph(context: Context) {
     val accountStore = AccountStore(appContext)
     val assetSnapshotStore = AssetSnapshotStore(appContext)
     private val pendingRechargeStore = DataStorePendingRechargeStore(appContext)
+    private val pendingUnlockStore = DataStorePendingUnlockStore(appContext)
     val historyRepository = HistoryRepository(appContext, accountStore)
     private val disclaimerStore = DisclaimerStore(appContext)
     private val sessionExpiryNotifier = SessionExpiryNotifier()
@@ -222,6 +225,8 @@ class AppGraph(context: Context) {
             onCrash = diagnostics::recordCrashSync,
         ).install()
         diagnostics.start { waterSessionStore.load()?.traceId }
+        // 启动时读一次待对账记录：过期的会被存储层立即删除，TTL 因此是真实生效的。
+        scope.launch { runCatching { pendingUnlockStore.load() } }
     }
 
     val controller = AppController(
@@ -253,5 +258,7 @@ class AppGraph(context: Context) {
         pointsDeduct = pointsRepository,
         timingSink = if (BuildConfig.DEBUG) UnlockTimingLog else NoopUnlockTimingSink,
         diagnostics = diagnostics,
+        pendingStore = pendingUnlockStore,
+        accountIdProvider = accountStore::activeLocalId,
     )
 }

@@ -26,6 +26,11 @@ import io.github.winddrift.fuckpangguai.points.PointsDeductSource
 import io.github.winddrift.fuckpangguai.storage.ConfirmedDevice
 import io.github.winddrift.fuckpangguai.storage.DeviceConfigSource
 import io.github.winddrift.fuckpangguai.storage.SettingsSource
+import io.github.winddrift.fuckpangguai.water.NoopPendingUnlockStore
+import io.github.winddrift.fuckpangguai.water.PendingUnlock
+import io.github.winddrift.fuckpangguai.water.PendingUnlockPolicy
+import io.github.winddrift.fuckpangguai.water.PendingUnlockStore
+import io.github.winddrift.fuckpangguai.water.ReconcileDecision
 import io.github.winddrift.fuckpangguai.water.WaterDefaults
 import io.github.winddrift.fuckpangguai.water.WaterDataSource
 import kotlinx.coroutines.CancellationException
@@ -96,6 +101,18 @@ data class UnlockSession(
     val traceId: String = "",
 )
 
+/**
+ * 解锁请求已成功但设备启动未确认，此时订单已经产生。
+ *
+ * 携带订单标识，让 catch 分支能做对账而不是丢弃订单；它不代表可以重试解锁。
+ */
+class UnlockTimeoutException(
+    val orderNo: String,
+    val msgId: String,
+    val polls: Int,
+    val durationMs: Long,
+) : Exception("设备启动超时，上一笔解锁待核对，请勿重复解锁")
+
 sealed interface ConfirmState {
     data object Loading : ConfirmState
     data object NeedsLocationPermission : ConfirmState
@@ -104,6 +121,9 @@ sealed interface ConfirmState {
     data object Unlocking : ConfirmState
     data class DryRun(val info: DryRunInfo) : ConfirmState
     data class Unlocked(val session: UnlockSession) : ConfirmState
+
+    /** 上一笔解锁已下单但设备启动未确认：可见的"待核对"态，不可再次解锁。 */
+    data class PendingReconcile(val message: String) : ConfirmState
     data class Error(val message: String) : ConfirmState
 }
 
@@ -117,6 +137,8 @@ class ConfirmController(
     private val pointsDeduct: PointsDeductSource = NoopPointsDeductSource,
     private val timingSink: UnlockTimingSink = NoopUnlockTimingSink,
     private val diagnostics: DiagSink = NoopDiagSink,
+    private val pendingStore: PendingUnlockStore = NoopPendingUnlockStore,
+    private val accountIdProvider: () -> String? = { null },
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val _state = MutableStateFlow<ConfirmState>(ConfirmState.Loading)
@@ -143,6 +165,10 @@ class ConfirmController(
     private var deductEnabled = false
     private var deductEligibility: PointsDeductEligibility? = null
     private var deductDeferred: CompletableDeferred<PointsDeductEligibility>? = null
+    private var pendingUnlock: PendingUnlock? = null
+    private var reconcileJob: Job? = null
+    /** 每次放弃/接管都换一个 token，让在途的对账循环自行失效。 */
+    private var reconcileToken = 0
 
     fun start(device: ResolvedDevice) {
         val gen = ++generation
@@ -165,6 +191,7 @@ class ConfirmController(
 
         loadJob = scope.launch {
             _state.value = ConfirmState.Loading
+            loadPendingUnlock()
             try {
                 val detail = device.detail
                 if (detail.categoryCode != AppConfig.WATER_CATEGORY) {
@@ -324,6 +351,36 @@ class ConfirmController(
         )
     }
 
+    /**
+     * 用户显式放弃上一笔待对账订单。
+     *
+     * 与 [abandon] 区分：通用 abandon 走换设备、页面重建等路径，不能顺手清掉待对账记录，
+     * 否则真实存在的订单会失去追踪。只有这里才允许清除并记审计事件。
+     */
+    fun abandonPendingUnlock() {
+        val pending = pendingUnlock ?: return
+        val now = clock()
+        // 先让在途的对账循环失效，避免它随后又 save 或发布 Unlocked。
+        reconcileToken += 1
+        reconcileJob?.cancel()
+        reconcileJob = null
+        scope.launch {
+            clearPendingUnlock()
+            diagnostics.event(
+                DiagLevel.Warn,
+                DiagFlow.Confirm,
+                "unlock_reconcile_abandoned",
+                message = "用户放弃待对账订单",
+                traceId = traceId,
+                fields = mapOf(
+                    "orderNo" to pending.orderNo,
+                    "pendingAgeMs" to (now - pending.createdAt).coerceAtLeast(0L).toString(),
+                ),
+            )
+            _state.value = ConfirmState.Error("已放弃上一笔待核对订单，可重新解锁")
+        }
+    }
+
     fun abandon(reason: String) {
         if (traceId.isBlank() || unlockSucceeded) return
         if (_state.value is ConfirmState.Unlocking) {
@@ -400,6 +457,24 @@ class ConfirmController(
     fun unlock() {
         if (abandoned) return
         val ready = (_state.value as? ConfirmState.Ready)?.value ?: return
+        val pending = pendingUnlock
+        if (pending != null &&
+            PendingUnlockPolicy.matches(pending, ready.device.scan.id, clock())
+        ) {
+            // 上一笔订单可能已经让设备启动，再解锁就是第二笔订单。
+            diagnostics.event(
+                DiagLevel.Warn,
+                DiagFlow.Confirm,
+                "unlock_reconcile_blocked",
+                traceId = traceId,
+                fields = mapOf(
+                    "orderNo" to pending.orderNo,
+                    "pendingAgeMs" to (clock() - pending.createdAt).coerceAtLeast(0L).toString(),
+                ),
+            )
+            _state.value = ConfirmState.PendingReconcile("上一笔解锁待核对，请勿重复解锁")
+            return
+        }
         val payType = WaterDefaults.payTypeFor(ready.channel)
         if (ready.dryRun) {
             val at = clock()
@@ -507,11 +582,32 @@ class ConfirmController(
                 )
                 unlockCallMs = clock() - unlockStartedAt
 
+                // 订单已经产生，先落盘待对账记录，再等设备启动。
+                val pending = PendingUnlock(
+                    orderNo = unlock.orderNo,
+                    msgId = unlock.msgId,
+                    goodsId = ready.device.scan.id,
+                    skuId = ready.sku.skuId,
+                    deviceName = ready.device.detail.name,
+                    supportAppUserFinish = ready.device.detail.supportAppUserFinish,
+                    traceId = traceId,
+                    payType = payType,
+                    usePoints = usePoints,
+                    createdAt = clock(),
+                )
+                savePendingUnlock(pending)
+
                 sync = waitForDevice(unlock)
                 if (!sync.ready) {
-                    throw ApiException(-1, "设备启动超时，请检查设备状态")
+                    throw UnlockTimeoutException(
+                        orderNo = unlock.orderNo,
+                        msgId = unlock.msgId,
+                        polls = sync.polls,
+                        durationMs = sync.durationMs,
+                    )
                 }
 
+                clearPendingUnlock()
                 if (acceleration == UnlockAcceleration.Disabled) {
                     persistConfirmed(ready)
                 }
@@ -587,6 +683,70 @@ class ConfirmController(
                 }
             } catch (exception: CancellationException) {
                 throw exception
+            } catch (timeout: UnlockTimeoutException) {
+                // 超时不再丢弃订单：先按退避继续对账，能接管就进入接水会话。
+                diagnostics.event(
+                    DiagLevel.Warn,
+                    DiagFlow.Confirm,
+                    "unlock_timeout_pending",
+                    message = timeout.userMessage(),
+                    traceId = traceId,
+                    fields = mapOf(
+                        "orderNo" to timeout.orderNo,
+                        "polls" to timeout.polls.toString(),
+                        "waitedMs" to timeout.durationMs.toString(),
+                    ),
+                )
+                reportTiming(
+                    buildTiming(
+                        outcome = UnlockOutcome.Failed,
+                        ready = ready,
+                        bindStats = bindStats,
+                        unlockCallMs = unlockCallMs,
+                        sync = sync,
+                        totalMs = clock() - clickedAt,
+                        errorKind = errorKind(timeout),
+                    ),
+                )
+                val adopted = reconcilePendingUnlock(ready, timeout)
+                if (!adopted) {
+                    val endedAt = clock()
+                    diagnostics.stageFinished(
+                        traceId = traceId,
+                        stage = TraceStage.Unlock,
+                        outcome = StageOutcome.Failed,
+                        endedAt = endedAt,
+                        attempts = 1 + sync.polls + if (bindStats.skipped) 0 else 1,
+                        error = timeout.userMessage(),
+                        fields = mapOf(
+                            "channel" to ready.channel.methodName,
+                            "acceleration" to acceleration.name,
+                            "unlockCallMs" to unlockCallMs.toString(),
+                            "syncPolls" to sync.polls.toString(),
+                            "syncSource" to sync.source,
+                            "errorKind" to errorKind(timeout),
+                            "pending" to "true",
+                        ),
+                    )
+                    diagnostics.finishTrace(
+                        traceId = traceId,
+                        outcome = TraceOutcome.Failed,
+                        endedAt = endedAt,
+                        error = timeout.userMessage(),
+                    )
+                    try {
+                        deviceRepository.clearCachedPlans(ready.device)
+                    } catch (exception: CancellationException) {
+                        throw exception
+                    } catch (_: Throwable) {
+                    }
+                    // 订单仍待核对，给的是可放弃的待核对态，不是普通错误态。
+                    _state.value = if (pendingUnlock != null) {
+                        ConfirmState.PendingReconcile(timeout.userMessage())
+                    } else {
+                        ConfirmState.Error(timeout.userMessage())
+                    }
+                }
             } catch (throwable: Throwable) {
                 val endedAt = clock()
                 diagnostics.stageFinished(
@@ -642,6 +802,201 @@ class ConfirmController(
                 }
                 _state.value = ConfirmState.Error(message)
             }
+        }
+    }
+
+    /**
+     * 解锁超时后的对账：用 msgSync 与 device_is_start 继续确认设备是否已启动。
+     *
+     * 只查询、不再下单：`msgSync` 与 `queryDeviceStarted` 都不会产生新订单。
+     * 返回 true 表示已接管并发布 [ConfirmState.Unlocked]。
+     */
+    private suspend fun reconcilePendingUnlock(
+        ready: ConfirmReady,
+        timeout: UnlockTimeoutException,
+    ): Boolean = reconcileLoop(ready, basePolls = timeout.polls, gen = generation)
+
+    /** 进入确认页时发现同设备有待核对记录：先对账，能接管就直接进入接水。 */
+    private suspend fun reconcileExistingPending(ready: ConfirmReady) {
+        if (!reconcileLoop(ready, basePolls = 0, gen = generation)) {
+            _state.value = ConfirmState.PendingReconcile(
+                "上一笔解锁待核对，请勿重复解锁",
+            )
+        }
+    }
+
+    private suspend fun reconcileLoop(ready: ConfirmReady, basePolls: Int, gen: Int): Boolean {
+        var pending = pendingUnlock ?: return false
+        val token = reconcileToken
+        var probe: Boolean? = null
+        while (true) {
+            // 用户放弃或新一轮接管后，旧循环必须立刻停手，不能再 save 或发布状态。
+            if (pendingUnlock == null || token != reconcileToken || gen != generation) {
+                return false
+            }
+            val decision = PendingUnlockPolicy.decide(pending, probe, clock())
+            when (decision) {
+                ReconcileDecision.Adopt -> {
+                    // 用户在对账途中离开时 abandon() 只会置 abandonPending，同样不能接管。
+                    if (abandoned || abandonPending || gen != generation) {
+                        // 页面已离开：订单可能真启动了，记录必须留着给下一次核对，不能清。
+                        diagnostics.event(
+                            DiagLevel.Warn,
+                            DiagFlow.Confirm,
+                            "unlock_reconcile_adopt_deferred",
+                            message = "页面已离开，接管推迟到下次进入",
+                            traceId = traceId,
+                            fields = mapOf(
+                                "orderNo" to pending.orderNo,
+                                "probes" to pending.probes.toString(),
+                                "pendingAgeMs" to (clock() - pending.createdAt)
+                                    .coerceAtLeast(0L).toString(),
+                            ),
+                        )
+                        return false
+                    }
+                    clearPendingUnlock()
+                    reconcileToken += 1
+                    val now = clock()
+                    val adopted = pending.toSession(now, accountIdProvider().orEmpty()).copy(
+                        deviceName = ready.device.detail.name.ifBlank { "饮水机" },
+                    )
+                    unlockSucceeded = true
+                    diagnostics.event(
+                        DiagLevel.Info,
+                        DiagFlow.Confirm,
+                        "unlock_reconcile_adopt",
+                        traceId = traceId,
+                        fields = mapOf(
+                            "orderNo" to pending.orderNo,
+                            "probes" to pending.probes.toString(),
+                            "pendingAgeMs" to (now - pending.createdAt).coerceAtLeast(0L).toString(),
+                        ),
+                    )
+                    diagnostics.stageFinished(
+                        traceId = traceId,
+                        stage = TraceStage.Unlock,
+                        outcome = StageOutcome.Success,
+                        endedAt = now,
+                        attempts = 1 + basePolls + pending.probes,
+                        fields = mapOf(
+                            "channel" to ready.channel.methodName,
+                            "syncPolls" to basePolls.toString(),
+                            "reconcileProbes" to pending.probes.toString(),
+                            "source" to "reconcile",
+                        ),
+                    )
+                    _state.value = ConfirmState.Unlocked(
+                        UnlockSession(
+                            device = ready.device,
+                            sku = ready.sku,
+                            channel = ready.channel,
+                            unlock = Unlock(
+                                orderNo = adopted.orderNo,
+                                msgId = adopted.msgId,
+                            ),
+                            location = ready.location ?: locationSnapshot
+                                ?: LocationSnapshot("", ""),
+                            traceId = traceId,
+                        ),
+                    )
+                    return true
+                }
+
+                ReconcileDecision.Retry -> {
+                    delay(PendingUnlockPolicy.probeDelayMs(pending.probes + 1))
+                    if (pendingUnlock == null || token != reconcileToken || gen != generation) {
+                        return false
+                    }
+                    pending = pending.copy(probes = pending.probes + 1)
+                    savePendingUnlock(pending)
+                    // 两路信号共用同一次探测与同一份预算，任一就绪即接管。
+                    probe = queryDeviceStarted(pending)
+                    if (probe != true && msgSyncReady(pending)) probe = true
+                }
+
+                ReconcileDecision.GiveUp, ReconcileDecision.Expired -> {
+                    diagnostics.event(
+                        DiagLevel.Warn,
+                        DiagFlow.Confirm,
+                        if (decision == ReconcileDecision.Expired) {
+                            "unlock_pending_expired"
+                        } else {
+                            "unlock_reconcile_give_up"
+                        },
+                        traceId = traceId,
+                        fields = mapOf(
+                            "orderNo" to pending.orderNo,
+                            "probes" to pending.probes.toString(),
+                            "pendingAgeMs" to (clock() - pending.createdAt).coerceAtLeast(0L).toString(),
+                        ),
+                    )
+                    if (decision == ReconcileDecision.Expired) {
+                        clearPendingUnlock()
+                        reconcileToken += 1
+                    }
+                    return false
+                }
+            }
+        }
+    }
+
+    /** 用 msgId 兜底探测；msgId 为空或查询失败都返回 false，不额外消耗预算。 */
+    private suspend fun msgSyncReady(pending: PendingUnlock): Boolean {
+        if (pending.msgId.isBlank()) return false
+        val bean = try {
+            waterRepository.msgSync(pending.msgId)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Throwable) {
+            return false
+        }
+        return try {
+            waterRepository.isDeviceReady(bean)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /** 查询设备是否已启动；查询失败返回 null 表示未知，由策略决定是否继续重试。 */
+    private suspend fun queryDeviceStarted(pending: PendingUnlock): Boolean? = try {
+        waterRepository.queryDeviceStarted(pending.orderNo)
+    } catch (exception: CancellationException) {
+        throw exception
+    } catch (_: Throwable) {
+        null
+    }
+
+    private suspend fun loadPendingUnlock() {
+        val stored = try {
+            pendingStore.load()
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Throwable) {
+            null
+        }
+        pendingUnlock = stored
+    }
+
+    private suspend fun savePendingUnlock(pending: PendingUnlock) {
+        pendingUnlock = pending
+        try {
+            pendingStore.save(pending)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Throwable) {
+        }
+    }
+
+    private suspend fun clearPendingUnlock() {
+        pendingUnlock = null
+        try {
+            pendingStore.clear()
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Throwable) {
         }
     }
 
@@ -886,7 +1241,19 @@ class ConfirmController(
         )
         launchPrebind(ready, gen)
         maybeAutoUnlock(device, gen)
+        reconcilePendingInBackground(ready, gen)
         return true
+    }
+
+    /** 命中同设备的待核对记录时，后台先对账一次，避免用户看到"可解锁"却点不动。 */
+    private fun reconcilePendingInBackground(ready: ConfirmReady, gen: Int) {
+        val pending = pendingUnlock ?: return
+        if (!PendingUnlockPolicy.matches(pending, ready.device.scan.id, clock())) return
+        reconcileJob?.cancel()
+        reconcileJob = scope.launch {
+            if (gen != generation) return@launch
+            reconcileExistingPending(ready)
+        }
     }
 
     private fun launchPrebind(ready: ConfirmReady, gen: Int) {
@@ -955,6 +1322,9 @@ class ConfirmController(
         if (ready.device != device) return
         if (!ready.oneTap || !ready.confirmed || ready.dryRun) return
         if (ready.locationPhase != LocationPhase.Ready) return
+        // 上一笔待对账未结清时不做一键解锁，避免产生第二笔订单。
+        val pending = pendingUnlock
+        if (pending != null && PendingUnlockPolicy.matches(pending, device.scan.id, clock())) return
 
         autoUnlockTriggered = true
         unlock()
@@ -967,7 +1337,13 @@ class ConfirmController(
 
     private suspend fun waitForDevice(unlock: Unlock): SyncOutcome = coroutineScope {
         if (unlock.msgId.isBlank()) {
-            throw ApiException(-1, "解锁成功但未返回 msgId")
+            // 订单已产生但没有 msgId：无法轮询，仍按超时进入对账，不能丢弃订单。
+            throw UnlockTimeoutException(
+                orderNo = unlock.orderNo,
+                msgId = "",
+                polls = 0,
+                durationMs = 0L,
+            )
         }
         val startedAt = clock()
         var polls = 0
@@ -1080,6 +1456,7 @@ class ConfirmController(
     }
 
     private fun errorKind(throwable: Throwable): String = when (throwable) {
+        is UnlockTimeoutException -> "UnlockTimeout"
         is ApiException -> "ApiException-${throwable.code}"
         is IOException -> "IOException"
         else -> throwable.javaClass.simpleName

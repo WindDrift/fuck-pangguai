@@ -378,13 +378,14 @@ class ConfirmControllerTest {
         controller.unlock()
         advanceTimeBy(16_000)
         advanceUntilIdle()
-        assertTrue(controller.state.value is ConfirmState.Error)
+        // 超时后订单转入待核对，不再直接落到普通错误态。
+        assertTrue(controller.state.value is ConfirmState.PendingReconcile)
         assertNull(deps.configSource.saved)
         assertEquals(1, deps.deviceSource.clearCalls)
 
         val timing = deps.timingSink.entries.single()
         assertEquals(UnlockOutcome.Failed, timing.outcome)
-        assertEquals("ApiException--1", timing.errorKind)
+        assertEquals("UnlockTimeout", timing.errorKind)
         assertTrue(deps.waterSource.msgSyncCalls > 9)
     }
 

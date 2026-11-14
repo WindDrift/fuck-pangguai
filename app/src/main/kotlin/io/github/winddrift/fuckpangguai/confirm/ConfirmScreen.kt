@@ -25,6 +25,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -37,6 +40,7 @@ import io.github.winddrift.fuckpangguai.net.dto.Sku
 import io.github.winddrift.fuckpangguai.ui.animation.ColorSpringSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentSlideSpec
+import io.github.winddrift.fuckpangguai.ui.components.ConfirmDialog
 import io.github.winddrift.fuckpangguai.ui.components.DeviceInfoCard
 import io.github.winddrift.fuckpangguai.ui.components.KeyValueRow
 import io.github.winddrift.fuckpangguai.points.PointsDeductEligibility
@@ -62,12 +66,14 @@ fun ConfirmScreen(
     onSelectChannel: (Int) -> Unit,
     onRetryLocation: () -> Unit,
     onBack: () -> Unit,
+    onAbandonPendingUnlock: () -> Unit = {},
 ) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
         onRetryLocation()
     }
+    var showAbandonPendingDialog by remember { mutableStateOf(false) }
 
     AnimatedContent(
         targetState = state,
@@ -121,6 +127,39 @@ fun ConfirmScreen(
                         isError = true,
                     )
                 }
+            }
+
+            is ConfirmState.PendingReconcile -> {
+                ScrollColumn {
+                    StatusCard(
+                        title = "正在核对上一笔解锁",
+                        message = current.message,
+                    )
+                    Button(
+                        onClick = { showAbandonPendingDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColorsPrimary(
+                            color = MiuixTheme.colorScheme.error,
+                            contentColor = MiuixTheme.colorScheme.onError,
+                        ),
+                    ) {
+                        Text("放弃这笔订单")
+                    }
+                    TextButton(
+                        text = "返回扫码",
+                        onClick = onBack,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                ConfirmDialog(
+                    show = showAbandonPendingDialog,
+                    title = "放弃这笔订单？",
+                    summary = "放弃后不再核对这笔解锁，若设备已启动请到原 App 核对账单。",
+                    confirmText = "放弃",
+                    destructive = true,
+                    onConfirm = onAbandonPendingUnlock,
+                    onDismiss = { showAbandonPendingDialog = false },
+                )
             }
 
             is ConfirmState.Error -> {
@@ -255,6 +294,7 @@ private val ConfirmState.stageKey: Int
         ConfirmState.Unlocking -> 4
         is ConfirmState.DryRun -> 5
         is ConfirmState.Unlocked -> 6
+        is ConfirmState.PendingReconcile -> 8
         is ConfirmState.Error -> 7
     }
 

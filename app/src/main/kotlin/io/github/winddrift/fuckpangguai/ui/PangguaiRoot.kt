@@ -614,6 +614,9 @@ fun PangguaiRoot(
                             onSelectChannel = { confirmController?.selectChannel(it) },
                             onRetryLocation = { confirmController?.retryLocation() },
                             onBack = { closeSecondary() },
+                            onAbandonPendingUnlock = {
+                                confirmController?.abandonPendingUnlock()
+                            },
                         )
 
                         RootDestination.Debug -> DebugScreen(
