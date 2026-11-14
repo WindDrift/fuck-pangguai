@@ -108,11 +108,14 @@ class WaterTraceTracker(
     private fun updateSettlement(trace: WaterTrace, session: WaterSession): WaterTrace {
         val existing = trace.stage(TraceStage.SettlePay)
         if (existing?.reached == true) return trace
-        val started = session.settleStartedAt > 0L || session.phase == SessionPhase.SETTLING ||
+        // FAULT 单独出现不代表进过结算：设备在接水阶段异常时根本没有结算阶段，
+        // 此时生成一条 0ms 的结算记录只会误导统计。
+        val started = session.settleStartedAt > 0L ||
+            session.payOrderNo.isNotBlank() ||
+            session.phase == SessionPhase.SETTLING ||
             session.phase == SessionPhase.PAID ||
             session.phase == SessionPhase.FINISHED_NO_CHARGE ||
-            session.phase == SessionPhase.PAY_UNKNOWN ||
-            session.phase == SessionPhase.FAULT
+            session.phase == SessionPhase.PAY_UNKNOWN
         if (!started) return trace
 
         val startedAt = session.settleStartedAt.takeIf { it > 0L } ?: session.updatedAt
@@ -136,16 +139,19 @@ class WaterTraceTracker(
             outcome == StageOutcome.Failed -> session.error.ifBlank { "结算或支付未确认" }
             else -> ""
         }
+        // 结算结束时间独立于"结束接水"时间：endedAt 在结算开始前就已写入，
+        // 用它当结束时间会让结算阶段恒为 0ms 甚至倒挂。旧记录没有 settleEndedAt 时回落到 updatedAt。
         val finishAt = if (outcome != StageOutcome.Running) {
-            session.endedAt.takeIf { it > 0L } ?: session.updatedAt
+            session.settleEndedAt.takeIf { it > 0L } ?: session.updatedAt
         } else {
             0L
         }
+        val stageStartedAt = if (finishAt > 0L) minOf(startedAt, finishAt) else startedAt
         val record = StageRecord(
             stage = TraceStage.SettlePay,
-            startedAt = startedAt,
+            startedAt = stageStartedAt,
             endedAt = finishAt,
-            durationMs = if (finishAt > 0L) (finishAt - startedAt).coerceAtLeast(0L) else 0L,
+            durationMs = if (finishAt > 0L) finishAt - stageStartedAt else 0L,
             outcome = outcome,
             attempts = attempts,
             error = error,
@@ -154,9 +160,11 @@ class WaterTraceTracker(
     }
 
     private fun finalize(trace: WaterTrace, session: WaterSession): WaterTrace {
-        val endedAt = endTime(session)
-        val waterDuration = if (endedAt > 0L) {
-            (endedAt - session.startedAt).coerceAtLeast(0L)
+        val waterEndedAt = endTime(session)
+        // trace 结束时间必须覆盖结算：endedAt 在结算开始前写入，取两者较大值。
+        val endedAt = maxOf(waterEndedAt, session.settleEndedAt)
+        val waterDuration = if (waterEndedAt > 0L) {
+            (waterEndedAt - session.startedAt).coerceAtLeast(0L)
         } else {
             (clock() - session.startedAt).coerceAtLeast(0L)
         }

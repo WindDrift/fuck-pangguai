@@ -1071,7 +1071,8 @@ private fun TraceStatsCard(stats: io.github.winddrift.fuckpangguai.diagnostics.m
                         Text(stage.label, style = MiuixTheme.textStyles.body2)
                         Text(
                             "成功 ${stageStats.success} · 失败 ${stageStats.failed} · " +
-                                "放弃 ${stageStats.abandoned} · 进行中 ${stageStats.running}",
+                                "放弃 ${stageStats.abandoned} · 未到达 ${stageStats.notReached} · " +
+                                "进行中 ${stageStats.running}",
                             style = MiuixTheme.textStyles.footnote1,
                             color = colors.onSurfaceSecondary,
                         )

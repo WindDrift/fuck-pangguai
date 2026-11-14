@@ -9,6 +9,8 @@ data class StageStats(
     val failed: Int = 0,
     val abandoned: Int = 0,
     val running: Int = 0,
+    /** 未到达该阶段的 trace 数，与「阶段被放弃」区分开。 */
+    val notReached: Int = 0,
     val participants: Int = 0,
     val avgDurationMs: Long = 0L,
     val maxDurationMs: Long = 0L,
@@ -39,6 +41,7 @@ fun computeTraceStats(traces: List<WaterTrace>): TraceStats {
         var failed = 0
         var abandoned = 0
         var running = 0
+        var notReached = 0
         var participants = 0
         var durationSum = 0L
         var maxDuration = 0L
@@ -47,7 +50,8 @@ fun computeTraceStats(traces: List<WaterTrace>): TraceStats {
         for (trace in traces) {
             val record = trace.stage(stage)
             if (record == null) {
-                if (trace.outcome == TraceOutcome.Running) running++ else abandoned++
+                // 从未进入该阶段与「进入后放弃」是两件事，分开计数。
+                if (trace.outcome == TraceOutcome.Running) running++ else notReached++
                 continue
             }
             when (record.outcome) {
@@ -72,6 +76,7 @@ fun computeTraceStats(traces: List<WaterTrace>): TraceStats {
             failed = failed,
             abandoned = abandoned,
             running = running,
+            notReached = notReached,
             participants = participants,
             avgDurationMs = if (participants > 0) durationSum / participants else 0L,
             maxDurationMs = maxDuration,

@@ -126,6 +126,9 @@ class WaterSyncService : Service() {
                 phase = SessionPhase.PAY_UNKNOWN,
                 error = "前台服务超时，请回到 App 或原 App 核对",
                 endedAt = session.endedAt.takeIf { it > 0L } ?: now,
+                settleEndedAt = session.settleEndedAt.takeIf { it > 0L }
+                    ?: now.takeIf { session.settleStartedAt > 0L }
+                    ?: 0L,
                 updatedAt = now,
             )
             current = updated
@@ -274,6 +277,10 @@ class WaterSyncService : Service() {
                             phase = SessionPhase.FAULT,
                             error = "设备异常",
                             endedAt = session.endedAt.takeIf { it > 0L } ?: now,
+                            // 只有真进过结算的故障才需要结算结束时间；未结算时保持 0。
+                            settleEndedAt = session.settleEndedAt.takeIf { it > 0L }
+                                ?: now.takeIf { session.settleStartedAt > 0L }
+                                ?: 0L,
                             updatedAt = now,
                         )
                         diagnostics.event(
@@ -385,6 +392,8 @@ class WaterSyncService : Service() {
                         phase = SessionPhase.FINISHED_NO_CHARGE,
                         endedAt = updated.endedAt.takeIf { it > 0L }
                             ?: System.currentTimeMillis(),
+                        settleEndedAt = updated.settleEndedAt.takeIf { it > 0L }
+                            ?: System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
                     ),
                 )
@@ -403,6 +412,8 @@ class WaterSyncService : Service() {
                         phase = SessionPhase.PAY_UNKNOWN,
                         error = "结算单状态未知，请到原 App 核对",
                         endedAt = updated.endedAt.takeIf { it > 0L }
+                            ?: System.currentTimeMillis(),
+                        settleEndedAt = updated.settleEndedAt.takeIf { it > 0L }
                             ?: System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
                     ),
@@ -448,12 +459,14 @@ class WaterSyncService : Service() {
                 ),
             )
             val pay = pollPay(updated, order.orderNo, order.payType)
+            val paidAt = System.currentTimeMillis()
             updated = updated.copy(
                 phase = if (pay.paid) SessionPhase.PAID else SessionPhase.PAY_UNKNOWN,
                 error = if (pay.paid) "" else "支付状态未确认，请到原 App 核对",
                 payPollAttempts = pay.attempts,
-                endedAt = updated.endedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
+                endedAt = updated.endedAt.takeIf { it > 0L } ?: paidAt,
+                settleEndedAt = updated.settleEndedAt.takeIf { it > 0L } ?: paidAt,
+                updatedAt = paidAt,
             )
             diagnostics.event(
                 if (pay.paid) DiagLevel.Info else DiagLevel.Warn,
@@ -469,11 +482,13 @@ class WaterSyncService : Service() {
             )
             finish(updated)
         } catch (throwable: Throwable) {
+            val failedAt = System.currentTimeMillis()
             updated = updated.copy(
                 phase = SessionPhase.PAY_UNKNOWN,
                 error = throwable.userMessage(),
-                endedAt = updated.endedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
+                endedAt = updated.endedAt.takeIf { it > 0L } ?: failedAt,
+                settleEndedAt = updated.settleEndedAt.takeIf { it > 0L } ?: failedAt,
+                updatedAt = failedAt,
             )
             diagnostics.event(
                 DiagLevel.Error,
@@ -488,12 +503,14 @@ class WaterSyncService : Service() {
 
     private suspend fun resumeSettlement(session: WaterSession) {
         if (session.payOrderNo.isBlank()) {
+            val now = System.currentTimeMillis()
             finish(
                 session.copy(
                     phase = SessionPhase.PAY_UNKNOWN,
                     error = "结算单状态未知，请到原 App 核对",
-                    endedAt = session.endedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis(),
+                    endedAt = session.endedAt.takeIf { it > 0L } ?: now,
+                    settleEndedAt = session.settleEndedAt.takeIf { it > 0L } ?: now,
+                    updatedAt = now,
                 ),
             )
             return
@@ -517,13 +534,15 @@ class WaterSyncService : Service() {
                 "orderNo" to session.payOrderNo,
             ),
         )
+        val paidAt = System.currentTimeMillis()
         finish(
             session.copy(
                 phase = if (pay.paid) SessionPhase.PAID else SessionPhase.PAY_UNKNOWN,
                 error = if (pay.paid) "" else "支付状态未确认，请到原 App 核对",
                 payPollAttempts = pay.attempts,
-                endedAt = session.endedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
+                endedAt = session.endedAt.takeIf { it > 0L } ?: paidAt,
+                settleEndedAt = session.settleEndedAt.takeIf { it > 0L } ?: paidAt,
+                updatedAt = paidAt,
             ),
         )
     }
@@ -563,12 +582,17 @@ class WaterSyncService : Service() {
     }
 
     private fun finish(session: WaterSession) {
+        val now = System.currentTimeMillis()
         val endedAt = if (session.phase in SessionPhase.TERMINAL && session.endedAt == 0L) {
-            System.currentTimeMillis()
+            now
         } else {
             session.endedAt
         }
-        val finalSession = session.copy(endedAt = endedAt)
+        // 兜底：结算已开始但终态路径没写结算结束时间时补写一次，保证结算耗时不为 0。
+        val settleEndedAt = session.settleEndedAt.takeIf { it > 0L }
+            ?: now.takeIf { session.settleStartedAt > 0L }
+            ?: 0L
+        val finalSession = session.copy(endedAt = endedAt, settleEndedAt = settleEndedAt)
         current = finalSession
         diagnostics.event(
             DiagLevel.Info,

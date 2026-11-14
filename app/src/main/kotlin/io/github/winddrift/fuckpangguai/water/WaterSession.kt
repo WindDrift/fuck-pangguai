@@ -29,6 +29,9 @@ data class WaterSession(
     val syncCount: Int = 0,
     val settleStartedAt: Long = 0L,
     val payPollAttempts: Int = 0,
+
+    /** 结算终态落定时间；0 表示尚未落定（旧记录反序列化后保持 0）。 */
+    val settleEndedAt: Long = 0L,
 )
 
 object SessionPhase {

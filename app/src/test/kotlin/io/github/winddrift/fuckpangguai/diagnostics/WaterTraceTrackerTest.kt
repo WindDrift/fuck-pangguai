@@ -8,6 +8,7 @@ import io.github.winddrift.fuckpangguai.diagnostics.model.WaterTrace
 import io.github.winddrift.fuckpangguai.water.SessionPhase
 import io.github.winddrift.fuckpangguai.water.WaterSession
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,6 +41,7 @@ class WaterTraceTrackerTest {
         endedAt: Long = 0L,
         syncCount: Int = 0,
         settleStartedAt: Long = 0L,
+        settleEndedAt: Long = 0L,
         payPollAttempts: Int = 0,
         error: String = "",
     ) = WaterSession(
@@ -62,6 +64,7 @@ class WaterTraceTrackerTest {
         endedAt = endedAt,
         syncCount = syncCount,
         settleStartedAt = settleStartedAt,
+        settleEndedAt = settleEndedAt,
         payPollAttempts = payPollAttempts,
     )
 
@@ -195,6 +198,45 @@ class WaterTraceTrackerTest {
     }
 
     @Test
+    fun `fault before settlement does not create a settle stage`() {
+        val trace = tracker.track(
+            baseTrace(),
+            session(
+                phase = SessionPhase.FAULT,
+                updatedAt = 3_000,
+                endedAt = 3_000,
+                error = "设备异常",
+            ),
+        )
+
+        // 设备在接水阶段异常，从未进入结算：不应生成 0ms 的结算记录。
+        assertNull(trace.stage(TraceStage.SettlePay))
+        assertEquals(TraceOutcome.Failed, trace.outcome)
+    }
+
+    @Test
+    fun `fault during settlement still records a real settle duration`() {
+        val trace = tracker.track(
+            baseTrace(),
+            session(
+                phase = SessionPhase.FAULT,
+                updatedAt = 80_000,
+                endedAt = 68_000,
+                settleStartedAt = 70_000,
+                settleEndedAt = 78_000,
+                error = "设备异常",
+                amount = "0.5",
+            ),
+        )
+
+        val settle = trace.stage(TraceStage.SettlePay)!!
+        assertEquals(StageOutcome.Failed, settle.outcome)
+        assertEquals(70_000, settle.startedAt)
+        assertEquals(78_000, settle.endedAt)
+        assertEquals(8_000, settle.durationMs)
+    }
+
+    @Test
     fun `finished trace ignores later session updates`() {
         val paid = tracker.track(
             baseTrace(),
@@ -216,6 +258,74 @@ class WaterTraceTrackerTest {
 
         assertEquals(TraceOutcome.Success, again.outcome)
         assertEquals(paid.stages, again.stages)
+    }
+
+    @Test
+    fun `settlement duration uses settle end time`() {
+        val trace = tracker.track(
+            baseTrace(),
+            session(
+                phase = SessionPhase.PAID,
+                updatedAt = 90_000,
+                waterConfirmedAt = 9_000,
+                endedAt = 68_000,
+                settleStartedAt = 70_000,
+                settleEndedAt = 88_000,
+                payPollAttempts = 2,
+                amount = "0.5",
+            ),
+        )
+
+        val settle = trace.stage(TraceStage.SettlePay)!!
+        assertEquals(StageOutcome.Success, settle.outcome)
+        assertEquals(70_000, settle.startedAt)
+        assertEquals(88_000, settle.endedAt)
+        assertEquals(18_000, settle.durationMs)
+        assertTrue(settle.endedAt >= settle.startedAt)
+        assertEquals(88_000, trace.endedAt)
+    }
+
+    @Test
+    fun `legacy session without settle end falls back to updatedAt`() {
+        val trace = tracker.track(
+            baseTrace(),
+            session(
+                phase = SessionPhase.PAID,
+                updatedAt = 88_000,
+                waterConfirmedAt = 9_000,
+                endedAt = 68_000,
+                settleStartedAt = 70_000,
+                settleEndedAt = 0L,
+                amount = "0.5",
+            ),
+        )
+
+        val settle = trace.stage(TraceStage.SettlePay)!!
+        assertEquals(88_000, settle.endedAt)
+        assertEquals(18_000, settle.durationMs)
+        assertTrue(settle.durationMs > 0L)
+    }
+
+    @Test
+    fun `trace end covers settlement`() {
+        val trace = tracker.track(
+            baseTrace(),
+            session(
+                phase = SessionPhase.PAID,
+                updatedAt = 90_000,
+                waterConfirmedAt = 9_000,
+                endedAt = 68_000,
+                settleStartedAt = 70_000,
+                settleEndedAt = 88_000,
+                amount = "0.5",
+            ),
+        )
+
+        // 结束接水在 68_000 落定，结算到 88_000 才结束，trace 总耗时必须覆盖结算。
+        assertEquals(88_000, trace.endedAt)
+        assertEquals(87_000, trace.totalDurationMs)
+        // 用水时长语义不变，仍只算到"结束接水"。
+        assertEquals(64_000, trace.waterDurationMs)
     }
 
     private fun success(stage: TraceStage, startedAt: Long, duration: Long) = StageRecord(

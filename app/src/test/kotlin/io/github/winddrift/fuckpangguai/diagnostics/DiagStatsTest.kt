@@ -12,7 +12,7 @@ import org.junit.Test
 class DiagStatsTest {
 
     @Test
-    fun `unreached stages count as abandoned and do not join averages`() {
+    fun `unreached stages count as not reached and do not join averages`() {
         val success = fullTrace(TraceOutcome.Success, base = 1_000)
         val failed = WaterTrace(
             traceId = "failed",
@@ -56,7 +56,9 @@ class DiagStatsTest {
 
         val confirm = stats.stage(TraceStage.ConfirmReady)
         assertEquals(1, confirm.success)
-        assertEquals(1, confirm.abandoned)
+        // 从未进入该阶段的 trace 记 notReached，不再混进 abandoned。
+        assertEquals(0, confirm.abandoned)
+        assertEquals(1, confirm.notReached)
         assertEquals(1, confirm.running)
         assertEquals(1, confirm.participants)
     }
@@ -113,6 +115,76 @@ class DiagStatsTest {
 
         val resolve = computeTraceStats(traces).stage(TraceStage.DeviceResolve)
         assertEquals(3.0, resolve.avgAttempts, 0.001)
+    }
+
+    @Test
+    fun `settlement stage average duration reflects real settle time`() {
+        val trace = WaterTrace(
+            traceId = "settled",
+            startedAt = 1_000,
+            updatedAt = 90_000,
+            outcome = TraceOutcome.Success,
+            endedAt = 88_000,
+            stages = listOf(
+                stage(TraceStage.WaterEnd, 1_000, 67_000, StageOutcome.Success, attempts = 1),
+                StageRecord(
+                    stage = TraceStage.SettlePay,
+                    startedAt = 70_000,
+                    endedAt = 88_000,
+                    durationMs = 18_000,
+                    outcome = StageOutcome.Success,
+                    attempts = 3,
+                ),
+            ),
+        )
+
+        val settle = computeTraceStats(listOf(trace)).stage(TraceStage.SettlePay)
+
+        assertEquals(1, settle.success)
+        assertEquals(1, settle.participants)
+        assertEquals(18_000L, settle.avgDurationMs)
+        assertEquals(18_000L, settle.maxDurationMs)
+    }
+
+    @Test
+    fun `settle stage separates not reached from abandoned`() {
+        val paid = WaterTrace(
+            traceId = "paid",
+            startedAt = 1_000,
+            outcome = TraceOutcome.Success,
+            endedAt = 20_000,
+            stages = listOf(
+                stage(TraceStage.SettlePay, 15_000, 5_000, StageOutcome.Success, attempts = 2),
+            ),
+        )
+        val faulted = WaterTrace(
+            traceId = "faulted",
+            startedAt = 2_000,
+            outcome = TraceOutcome.Failed,
+            endedAt = 3_000,
+            stages = listOf(
+                stage(TraceStage.WaterEnd, 2_000, 1_000, StageOutcome.Failed, attempts = 1),
+            ),
+        )
+        val settledButAbandoned = WaterTrace(
+            traceId = "abandoned",
+            startedAt = 4_000,
+            outcome = TraceOutcome.Abandoned,
+            endedAt = 9_000,
+            stages = listOf(
+                stage(TraceStage.SettlePay, 5_000, 0, StageOutcome.Abandoned, attempts = 1),
+            ),
+        )
+
+        val settle = computeTraceStats(listOf(paid, faulted, settledButAbandoned))
+            .stage(TraceStage.SettlePay)
+
+        assertEquals(1, settle.success)
+        assertEquals(1, settle.abandoned)
+        assertEquals(1, settle.notReached)
+        // 未到达阶段不参与平均耗时。
+        assertEquals(2, settle.participants)
+        assertEquals(2_500L, settle.avgDurationMs)
     }
 
     private fun stage(

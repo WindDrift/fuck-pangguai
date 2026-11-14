@@ -194,7 +194,8 @@ object DiagExport {
         stats.stages.forEach { stage ->
             appendLine(
                 "[${stage.stage.label}] 成功 ${stage.success} · 失败 ${stage.failed} · " +
-                    "放弃 ${stage.abandoned} · 进行中 ${stage.running} · " +
+                    "放弃 ${stage.abandoned} · 未到达 ${stage.notReached} · " +
+                    "进行中 ${stage.running} · " +
                     "平均 ${stage.avgDurationMs}ms · 最大 ${stage.maxDurationMs}ms · " +
                     "参与 ${stage.participants} · " +
                     "平均尝试 ${String.format(Locale.US, "%.1f", stage.avgAttempts)}",
