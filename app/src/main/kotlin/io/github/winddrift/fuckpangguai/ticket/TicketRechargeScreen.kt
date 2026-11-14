@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -205,9 +204,7 @@ fun TicketRechargeScreen(
                     text = "支付由支付宝处理；客户端仅在服务端确认订单后显示成功。",
                     style = MiuixTheme.textStyles.footnote1,
                     color = colors.onSurfaceSecondary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

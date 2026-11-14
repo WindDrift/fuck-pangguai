@@ -17,10 +17,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -407,19 +407,10 @@ fun PangguaiRoot(
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MiuixTheme.colorScheme.surface,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = {
                 SnackbarHost(
                     snackbarHostState,
-                    modifier = Modifier
-                        .then(
-                            if (bottomBarKind == RootBottomBar.None) {
-                                Modifier.navigationBarsPadding()
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .imePadding(),
+                    modifier = Modifier.imePadding(),
                 )
             },
             topBar = {
@@ -526,10 +517,16 @@ fun PangguaiRoot(
                 }
             },
         ) { innerPadding ->
+            // 扫码页要铺满到系统栏下方，登录/免责/关于自带 inset 处理；这些页面跳过 Scaffold 下发的 padding，避免重复消费。
+            val selfManagedInsets = destination == RootDestination.Scan ||
+                destination == RootDestination.Login ||
+                destination == RootDestination.Disclaimer ||
+                destination == RootDestination.About
+            val contentPadding = if (selfManagedInsets) PaddingValues(0.dp) else innerPadding
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
+                    .padding(contentPadding),
             ) {
                 AnimatedContent(
                     targetState = destination,
