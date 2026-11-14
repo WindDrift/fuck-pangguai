@@ -23,7 +23,10 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Badge
+import top.yukonga.miuix.kmp.basic.BadgedBox
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -53,25 +56,42 @@ internal fun HistoryFilterHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            TextField(
-                value = filter.query,
-                onValueChange = onQueryChange,
+            InputField(
+                query = filter.query,
+                onQueryChange = onQueryChange,
+                onSearch = { },
+                expanded = false,
+                onExpandedChange = { },
                 modifier = Modifier.weight(1f),
                 label = "搜索记录",
-                singleLine = true,
+                trailingIcon = if (filter.query.isNotBlank()) {
+                    {
+                        IconButton(
+                            onClick = { onQueryChange("") },
+                            backgroundColor = Color.Transparent,
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Close,
+                                contentDescription = "清除搜索",
+                            )
+                        }
+                    }
+                } else {
+                    null
+                },
             )
-            if (filter.query.isNotBlank()) {
-                IconButton(
-                    onClick = { onQueryChange("") },
-                    backgroundColor = Color.Transparent,
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Close,
-                        contentDescription = "清除搜索",
-                    )
-                }
-            }
-            Box {
+            BadgedBox(
+                badge = {
+                    if (filter.activeCategoryCount > 0) {
+                        Badge {
+                            Text(
+                                text = filter.activeCategoryCount.toString(),
+                                style = MiuixTheme.textStyles.footnote1,
+                            )
+                        }
+                    }
+                },
+            ) {
                 IconButton(
                     onClick = onOpenFilters,
                     backgroundColor = colors.surfaceContainer,
@@ -79,17 +99,6 @@ internal fun HistoryFilterHeader(
                     Icon(
                         imageVector = MiuixIcons.Filter,
                         contentDescription = "筛选",
-                    )
-                }
-                if (filter.activeCategoryCount > 0) {
-                    Text(
-                        text = filter.activeCategoryCount.toString(),
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .background(colors.primary, CircleShape)
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = colors.onPrimary,
                     )
                 }
             }
