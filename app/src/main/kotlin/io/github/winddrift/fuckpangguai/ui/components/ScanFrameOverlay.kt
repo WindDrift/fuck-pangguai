@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
+import io.github.winddrift.fuckpangguai.ui.theme.CameraOverlayColors
 import top.yukonga.miuix.kmp.anim.SinOutEasing
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -35,7 +36,7 @@ fun ScanFrameOverlay(
             .coerceAtLeast(200.dp)
         val cornerLength = 26.dp
         val strokeWidth = 3.dp
-        val scrim = Color.Black.copy(alpha = 0.42f)
+        val scrim = CameraOverlayColors.Scrim
         val scanLine = rememberInfiniteTransition(label = "scanLine")
         val scanProgress by scanLine.animateFloat(
             initialValue = 0.08f,
@@ -67,7 +68,7 @@ fun ScanFrameOverlay(
 
             val corner = cornerLength.toPx()
             val stroke = strokeWidth.toPx()
-            val color = Color.White.copy(alpha = 0.92f)
+            val color = CameraOverlayColors.FrameAccent
 
             fun cornerLines(x: Float, y: Float, dx: Float, dy: Float) {
                 drawLine(
@@ -96,7 +97,7 @@ fun ScanFrameOverlay(
                 brush = Brush.horizontalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        Color.White.copy(alpha = 0.85f),
+                        CameraOverlayColors.IconMuted,
                         Color.Transparent,
                     ),
                     startX = left,
@@ -116,7 +117,7 @@ fun ScanFrameOverlay(
                 .offset(y = frameSize / 2 + 24.dp)
                 .padding(horizontal = 16.dp),
             style = MiuixTheme.textStyles.footnote1,
-            color = Color.White.copy(alpha = 0.72f),
+            color = CameraOverlayColors.FrameHint,
         )
     }
 }

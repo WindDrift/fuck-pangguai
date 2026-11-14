@@ -55,6 +55,7 @@ import io.github.winddrift.fuckpangguai.BuildConfig
 import io.github.winddrift.fuckpangguai.R
 import io.github.winddrift.fuckpangguai.core.openExternalUrl
 import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
+import io.github.winddrift.fuckpangguai.ui.theme.CameraOverlayColors
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceGroup
 import io.github.winddrift.fuckpangguai.ui.components.copyTextToClipboard
@@ -401,20 +402,10 @@ private fun HeroOverlay(
                 modifier = Modifier
                     .size(96.dp)
                     .clip(RoundedCornerShape(28.dp))
-                    .background(
-                        if (dark) {
-                            Color.White.copy(alpha = 0.14f)
-                        } else {
-                            Color.White.copy(alpha = 0.6f)
-                        },
-                    )
+                    .background(CameraOverlayColors.aboutIconBackground(dark))
                     .border(
                         width = 1.dp,
-                        color = if (dark) {
-                            Color.White.copy(alpha = 0.18f)
-                        } else {
-                            Color.White.copy(alpha = 0.8f)
-                        },
+                        color = CameraOverlayColors.aboutIconBorder(dark),
                         shape = RoundedCornerShape(28.dp),
                     ),
                 contentAlignment = Alignment.Center,
@@ -446,13 +437,7 @@ private fun HeroOverlay(
                 modifier = Modifier
                     .padding(top = 12.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(
-                        if (dark) {
-                            Color.White.copy(alpha = 0.12f)
-                        } else {
-                            Color.White.copy(alpha = 0.55f)
-                        },
-                    )
+                    .background(CameraOverlayColors.aboutVersionPill(dark))
                     .then(versionModifier)
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 style = MiuixTheme.textStyles.footnote1,
@@ -487,11 +472,7 @@ private fun AboutTopBar(
                 onClick = onBack,
                 modifier = Modifier.size(44.dp),
                 backgroundColor = if (progress < 0.5f) {
-                    if (dark) {
-                        Color.Black.copy(alpha = 0.28f)
-                    } else {
-                        Color.White.copy(alpha = 0.55f)
-                    }
+                    CameraOverlayColors.aboutBackButton(dark)
                 } else {
                     Color.Transparent
                 },

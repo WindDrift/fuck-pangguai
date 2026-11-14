@@ -72,6 +72,7 @@ import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
 import io.github.winddrift.fuckpangguai.ui.components.MinimumTouchTarget
 import io.github.winddrift.fuckpangguai.ui.components.ScanFrameOverlay
 import io.github.winddrift.fuckpangguai.ui.components.TorchIcon
+import io.github.winddrift.fuckpangguai.ui.theme.CameraOverlayColors
 import io.github.winddrift.fuckpangguai.update.UpdateState
 import java.time.LocalTime
 import kotlinx.coroutines.Dispatchers
@@ -225,7 +226,7 @@ fun ScanScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(CameraOverlayColors.PreviewBackground),
     ) {
         if (cameraState != null) {
             QrCameraPreview(
@@ -257,17 +258,17 @@ fun ScanScreen(
                     imageVector = MiuixIcons.Info,
                     contentDescription = null,
                     modifier = Modifier.size(44.dp),
-                    tint = Color.White.copy(alpha = 0.8f),
+                    tint = CameraOverlayColors.IconMuted,
                 )
                 Text(
                     text = "需要相机权限才能扫码",
                     style = MiuixTheme.textStyles.title3,
-                    color = Color.White,
+                    color = CameraOverlayColors.PrimaryText,
                 )
                 Text(
                     text = "相册、手动输入与 NFC 仍然可用。",
                     style = MiuixTheme.textStyles.footnote1,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = CameraOverlayColors.SecondaryText,
                 )
                 Button(
                     onClick = {
@@ -424,7 +425,7 @@ private fun ScanHeader(
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color.Black.copy(alpha = 0.62f), Color.Transparent),
+                    listOf(CameraOverlayColors.HeaderGradientStart, Color.Transparent),
                 ),
             )
             .statusBarsPadding()
@@ -441,14 +442,14 @@ private fun ScanHeader(
                 Text(
                     text = greetingText(account, now.hour),
                     style = MiuixTheme.textStyles.title2,
-                    color = Color.White,
+                    color = CameraOverlayColors.PrimaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "对准设备上的二维码，或碰一碰 NFC 标签",
                     style = MiuixTheme.textStyles.footnote1,
-                    color = Color.White.copy(alpha = 0.72f),
+                    color = CameraOverlayColors.SecondaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -516,7 +517,7 @@ private fun NfcHintPillContent(text: String) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(Color.Black.copy(alpha = 0.38f))
+            .background(CameraOverlayColors.PanelBackground)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -525,12 +526,12 @@ private fun NfcHintPillContent(text: String) {
             imageVector = MiuixIcons.Scan,
             contentDescription = null,
             modifier = Modifier.size(16.dp),
-            tint = Color.White.copy(alpha = 0.85f),
+            tint = CameraOverlayColors.IconMuted,
         )
         Text(
             text = text,
             style = MiuixTheme.textStyles.footnote1,
-            color = Color.White.copy(alpha = 0.85f),
+            color = CameraOverlayColors.IconMuted,
         )
     }
 }
@@ -554,13 +555,13 @@ private fun ScanIdleCenter(
             },
             contentDescription = null,
             modifier = Modifier.size(64.dp),
-            tint = Color.White.copy(alpha = 0.9f),
+            tint = CameraOverlayColors.FrameAccent,
         )
         if (nfc == NfcAvailability.Enabled) {
             Text(
                 text = "NFC 读取已就绪",
                 style = MiuixTheme.textStyles.title3,
-                color = Color.White,
+                color = CameraOverlayColors.PrimaryText,
             )
         }
         Button(
@@ -573,7 +574,7 @@ private fun ScanIdleCenter(
             Text(
                 text = "设备不支持 NFC",
                 style = MiuixTheme.textStyles.footnote1,
-                color = Color.White.copy(alpha = 0.6f),
+                color = CameraOverlayColors.TertiaryText,
             )
         }
     }
@@ -585,7 +586,7 @@ private fun TorchToolButton(cameraState: QrCameraState) {
     val flashAvailable by cameraState.flashAvailable.collectAsStateWithLifecycle()
     if (flashAvailable) {
         val torchTint by animateColorAsState(
-            targetValue = if (torchOn) MiuixTheme.colorScheme.primary else Color.White,
+            targetValue = if (torchOn) MiuixTheme.colorScheme.primary else CameraOverlayColors.Icon,
             animationSpec = ColorSpringSpec,
             label = "torchTint",
         )
@@ -603,12 +604,12 @@ private fun ScanToolButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    tint: Color = Color.White,
+    tint: Color = CameraOverlayColors.Icon,
 ) {
     IconButton(
         onClick = onClick,
         modifier = Modifier.size(52.dp),
-        backgroundColor = Color.Black.copy(alpha = 0.4f),
+        backgroundColor = CameraOverlayColors.ToolBackground,
         cornerRadius = 26.dp,
     ) {
         Icon(
@@ -627,7 +628,7 @@ private fun ResolvingOverlay(
 ) {
     val colors = MiuixTheme.colorScheme
     Box(
-        modifier = modifier.background(Color.Black.copy(alpha = 0.55f)),
+        modifier = modifier.background(CameraOverlayColors.PillBackground),
         contentAlignment = Alignment.Center,
     ) {
         Card(
