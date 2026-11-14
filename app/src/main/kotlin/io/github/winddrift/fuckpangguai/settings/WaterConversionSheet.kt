@@ -32,6 +32,7 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -201,12 +202,25 @@ private fun DecimalField(
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
 ) {
+    val colors = MiuixTheme.colorScheme
     TextField(
         value = value,
         onValueChange = { onValueChange(sanitizeDecimalInput(it)) },
         modifier = modifier,
         label = label,
         singleLine = true,
+        colors = TextFieldDefaults.textFieldColors(
+            labelColor = if (value.isNotBlank() && value.toDoubleOrNull() == null) {
+                colors.error
+            } else {
+                colors.onSurfaceSecondary
+            },
+            borderColor = if (value.isNotBlank() && value.toDoubleOrNull() == null) {
+                colors.error
+            } else {
+                colors.outline
+            },
+        ),
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
     )

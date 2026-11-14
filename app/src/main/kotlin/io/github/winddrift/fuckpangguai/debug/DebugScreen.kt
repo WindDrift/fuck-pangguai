@@ -78,6 +78,7 @@ import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Copy
@@ -1345,6 +1346,18 @@ private fun NumberSettingSheet(
                 modifier = Modifier.fillMaxWidth(),
                 label = "$title（${range.first}-${range.last} $unit）",
                 singleLine = true,
+                colors = TextFieldDefaults.textFieldColors(
+                    labelColor = if (input.isNotBlank() && !valid) {
+                        MiuixTheme.colorScheme.error
+                    } else {
+                        MiuixTheme.colorScheme.onSurfaceSecondary
+                    },
+                    borderColor = if (input.isNotBlank() && !valid) {
+                        MiuixTheme.colorScheme.error
+                    } else {
+                        MiuixTheme.colorScheme.outline
+                    },
+                ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
             Button(
