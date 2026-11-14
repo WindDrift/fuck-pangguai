@@ -38,13 +38,24 @@ data class RequestLogEntry(
 
 private val logJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
-internal fun redactResponseBody(body: String): String {
+internal fun redactResponseBody(body: String, truncated: Boolean = false): String {
     if (body.isBlank()) return body
     val element = runCatching { logJson.parseToJsonElement(body) }.getOrNull()
     if (element !is JsonObject && element !is JsonArray) {
-        return "<省略 ${body.toByteArray(Charsets.UTF_8).size} 字节非 JSON 响应>"
+        val bytes = body.toByteArray(Charsets.UTF_8).size
+        // 截断的 JSON 与真正的非 JSON 必须区分：前者是合法 JSON，只是超过预览上限。
+        if (truncated && looksLikeJson(body)) {
+            return "<已截断的 JSON 响应：≥${bytes} 字节，未保存预览>"
+        }
+        return "<省略 ${bytes} 字节非 JSON 响应>"
     }
     return runCatching { redactJsonElement(element).toString() }.getOrDefault("<省略非 JSON 响应>")
+}
+
+/** 只看首个非空白字符：`{` 或 `[` 视为 JSON 候选，用于区分"截断"与"非 JSON"。 */
+internal fun looksLikeJson(body: String): Boolean {
+    val first = body.firstOrNull { !it.isWhitespace() }
+    return first == '{' || first == '['
 }
 
 private fun redactJsonElement(element: JsonElement): JsonElement = when (element) {

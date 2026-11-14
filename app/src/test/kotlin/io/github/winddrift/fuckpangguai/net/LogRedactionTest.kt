@@ -33,6 +33,38 @@ class LogRedactionTest {
     }
 
     @Test
+    fun `truncated json is reported as truncated instead of non json`() {
+        val raw = "{\"code\":0,\"data\":[{\"taskCode\":\"browse\","
+
+        val redacted = redactResponseBody(raw, truncated = true)
+
+        assertTrue(redacted.contains("已截断"))
+        assertTrue(redacted.contains("JSON"))
+        assertFalse(redacted.contains("非 JSON"))
+        assertFalse(redacted.contains("browse"))
+        assertFalse(redacted.contains("taskCode"))
+    }
+
+    @Test
+    fun `truncated non json keeps the non json wording`() {
+        val redacted = redactResponseBody("<html>ok</html>", truncated = true)
+
+        assertTrue(redacted.contains("非 JSON"))
+        assertFalse(redacted.contains("已截断"))
+    }
+
+    @Test
+    fun `valid json stays redacted even when the read was truncated`() {
+        val raw = """{"code":0,"token":"session-token","data":{"userName":"小明"}}"""
+
+        val redacted = redactResponseBody(raw, truncated = true)
+
+        assertFalse(redacted.contains("session-token"))
+        assertTrue(redacted.contains("小明"))
+        assertTrue(redacted.contains("<redacted>"))
+    }
+
+    @Test
     fun `non json body is omitted instead of copied`() {
         val redacted = redactResponseBody("<html>ok</html>")
 
