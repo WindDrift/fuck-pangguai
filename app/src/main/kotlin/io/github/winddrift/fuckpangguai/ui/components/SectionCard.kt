@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -22,20 +23,22 @@ fun SectionCard(
     title: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        insideMargin = PaddingValues(0.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (title != null) {
+            SmallTitle(title)
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            insideMargin = PaddingValues(0.dp),
         ) {
-            if (title != null) {
-                Text(title, style = MiuixTheme.textStyles.title3)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                content()
             }
-            content()
         }
     }
 }
