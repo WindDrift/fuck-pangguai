@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -28,14 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.ZoneId
-import top.yukonga.miuix.kmp.basic.Checkbox
-import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.preference.CheckboxPreference
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
@@ -573,38 +570,12 @@ private fun CheckboxRow(
     onCheckedChange: (Boolean) -> Unit,
     summary: String? = null,
 ) {
-    val colors = MiuixTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = checked,
-                role = Role.Checkbox,
-                onValueChange = onCheckedChange,
-            )
-            .heightIn(min = 48.dp)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Checkbox(
-            state = ToggleableState(checked),
-            onClick = null,
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MiuixTheme.textStyles.body2,
-            )
-            if (summary != null) {
-                Text(
-                    text = summary,
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = colors.onSurfaceSecondary,
-                )
-            }
-        }
-    }
+    CheckboxPreference(
+        title = label,
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        summary = summary,
+    )
 }
 
 @Composable
@@ -614,35 +585,12 @@ private fun RadioRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val colors = MiuixTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(
-                selected = selected,
-                role = Role.RadioButton,
-                onClick = onClick,
-            )
-            .heightIn(min = 48.dp)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        RadioButton(selected = selected, onClick = null)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MiuixTheme.textStyles.body2,
-            )
-            if (summary != null) {
-                Text(
-                    text = summary,
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = colors.onSurfaceSecondary,
-                )
-            }
-        }
-    }
+    RadioButtonPreference(
+        title = label,
+        summary = summary,
+        selected = selected,
+        onClick = onClick,
+    )
 }
 
 @Composable
