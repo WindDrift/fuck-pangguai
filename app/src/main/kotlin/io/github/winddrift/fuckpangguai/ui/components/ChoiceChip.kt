@@ -16,11 +16,12 @@ fun ChoiceChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    multiSelect: Boolean = false,
 ) {
     val colors = MiuixTheme.colorScheme
     MinimumTouchTarget(
         onClick = onClick,
-        role = Role.RadioButton,
+        role = if (multiSelect) Role.Checkbox else Role.RadioButton,
         selected = selected,
     ) {
         Card(

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.ZoneId
+import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
@@ -269,34 +270,28 @@ private fun TimeFilterSection(
 ) {
     val colors = MiuixTheme.colorScheme
     FilterSection(title = "时间范围") {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            items(HistoryTimePreset.entries) { preset ->
-                ChoiceChip(
-                    label = preset.label(),
-                    selected = filter.timePreset == preset,
-                    onClick = {
-                        onUpdate {
-                            it.copy(
-                                timePreset = preset,
-                                customStartEpochDay = if (preset == HistoryTimePreset.CUSTOM) {
-                                    it.customStartEpochDay
-                                } else {
-                                    null
-                                },
-                                customEndEpochDay = if (preset == HistoryTimePreset.CUSTOM) {
-                                    it.customEndEpochDay
-                                } else {
-                                    null
-                                },
-                            )
-                        }
-                    },
-                )
-            }
-        }
+        TabRow(
+            tabs = HistoryTimePreset.entries.map { it.label() },
+            selectedTabIndex = HistoryTimePreset.entries.indexOf(filter.timePreset),
+            onTabSelected = { index ->
+                val preset = HistoryTimePreset.entries[index]
+                onUpdate {
+                    it.copy(
+                        timePreset = preset,
+                        customStartEpochDay = if (preset == HistoryTimePreset.CUSTOM) {
+                            it.customStartEpochDay
+                        } else {
+                            null
+                        },
+                        customEndEpochDay = if (preset == HistoryTimePreset.CUSTOM) {
+                            it.customEndEpochDay
+                        } else {
+                            null
+                        },
+                    )
+                }
+            },
+        )
 
         if (filter.timePreset == HistoryTimePreset.CUSTOM) {
             DateRow(

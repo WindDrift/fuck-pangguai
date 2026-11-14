@@ -823,6 +823,7 @@ private fun EventFilterSheet(
                     ChoiceChip(
                         label = level.name,
                         selected = level in filter.levels,
+                        multiSelect = true,
                         onClick = {
                             onFilterChange {
                                 it.copy(
@@ -844,6 +845,7 @@ private fun EventFilterSheet(
                     ChoiceChip(
                         label = flow.label,
                         selected = flow in filter.flows,
+                        multiSelect = true,
                         onClick = {
                             onFilterChange {
                                 it.copy(
