@@ -45,6 +45,7 @@ import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
 import io.github.winddrift.fuckpangguai.ui.components.PhaseBadge
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
+import io.github.winddrift.fuckpangguai.ui.components.rememberLastNonNull
 import io.github.winddrift.fuckpangguai.ui.format.sessionPhaseLabel
 import io.github.winddrift.fuckpangguai.water.WaterConversion
 import io.github.winddrift.fuckpangguai.water.computeUsagePace
@@ -302,12 +303,13 @@ fun HistoryScreen(
         onReset = controller::clearFilters,
     )
 
-    selectedRecord?.let { record ->
-        OverlayBottomSheet(
-            show = true,
-            title = "记录详情",
-            onDismissRequest = { selectedId = null },
-        ) {
+    val detailRecord = rememberLastNonNull(selectedRecord)
+    OverlayBottomSheet(
+        show = selectedRecord != null,
+        title = "记录详情",
+        onDismissRequest = { selectedId = null },
+    ) {
+        detailRecord?.let { record ->
             Column(
                 modifier = Modifier
                     .navigationBarsPadding()

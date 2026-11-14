@@ -54,7 +54,6 @@ internal fun HistoryFilterSheet(
     onUpdate: ((HistoryFilter) -> HistoryFilter) -> Unit,
     onReset: () -> Unit,
 ) {
-    if (!show) return
     val context = LocalContext.current
     val colors = MiuixTheme.colorScheme
     val dark = colors.surface.luminance() < 0.5f
@@ -119,7 +118,7 @@ internal fun HistoryFilterSheet(
     }
 
     OverlayBottomSheet(
-        show = true,
+        show = show,
         title = "筛选",
         onDismissRequest = onDismiss,
     ) {

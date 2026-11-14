@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -16,6 +15,7 @@ import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import io.github.winddrift.fuckpangguai.ui.components.DeviceInfoCard
 import io.github.winddrift.fuckpangguai.ui.components.KeyValueRow
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
+import io.github.winddrift.fuckpangguai.ui.components.rememberLastNonNull
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -35,28 +35,27 @@ fun ScanStateOverlays(
     onOpenAlipay: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(
-        enabled = state is ScanState.DeviceReady ||
-            state is ScanState.NeedsBind ||
-            state is ScanState.ConfirmBind ||
-            state is ScanState.Message,
-    ) {
-        if (state !is ScanState.ConfirmBind || !state.binding) onReset()
+    val needsBind = state as? ScanState.NeedsBind
+    val deviceReady = rememberLastNonNull(state as? ScanState.DeviceReady)
+    val confirmBind = rememberLastNonNull(state as? ScanState.ConfirmBind)
+    val message = rememberLastNonNull(state as? ScanState.Message)
+
+    BackHandler(enabled = needsBind != null) {
+        onReset()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        when (state) {
-            is ScanState.DeviceReady -> OverlayBottomSheet(
-                show = true,
-                title = "设备信息",
-                onDismissRequest = onReset,
-            ) {
+        OverlayBottomSheet(
+            show = deviceReady != null && state is ScanState.DeviceReady,
+            title = "设备信息",
+            onDismissRequest = onReset,
+        ) {
+            deviceReady?.let { ready ->
                 Column(
-                    modifier = Modifier.navigationBarsPadding(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    DeviceInfoCard(device = state.device)
-                    if (state.device.detail.isBluetooth == 1) {
+                    DeviceInfoCard(device = ready.device)
+                    if (ready.device.detail.isBluetooth == 1) {
                         Text(
                             text = "在线设备可继续；BLE 设备当前仅支持探测。",
                             style = MiuixTheme.textStyles.footnote1,
@@ -64,7 +63,7 @@ fun ScanStateOverlays(
                         )
                     }
                     Button(
-                        onClick = { onContinue(state.device) },
+                        onClick = { onContinue(ready.device) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColorsPrimary(),
                     ) {
@@ -77,8 +76,10 @@ fun ScanStateOverlays(
                     )
                 }
             }
+        }
 
-            is ScanState.NeedsBind -> Card(
+        needsBind?.let { bind ->
+            Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp)
@@ -90,7 +91,7 @@ fun ScanStateOverlays(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text("读到新 NFC 标签", style = MiuixTheme.textStyles.title3)
-                    KeyValueRow("标签 ID", state.tagId)
+                    KeyValueRow("标签 ID", bind.tagId)
                     Text(
                         "请扫描同一台设备上的二维码，确认后再绑定。",
                         style = MiuixTheme.textStyles.body2,
@@ -103,21 +104,22 @@ fun ScanStateOverlays(
                     )
                 }
             }
+        }
 
-            is ScanState.ConfirmBind -> OverlayBottomSheet(
-                show = true,
-                title = "绑定标签到设备？",
-                onDismissRequest = { if (!state.binding) onReset() },
-            ) {
+        OverlayBottomSheet(
+            show = confirmBind != null && state is ScanState.ConfirmBind,
+            title = "绑定标签到设备？",
+            onDismissRequest = { if (state !is ScanState.ConfirmBind || !state.binding) onReset() },
+        ) {
+            confirmBind?.let { bind ->
                 Column(
-                    modifier = Modifier.navigationBarsPadding(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    SectionCard(title = state.device.detail.name.ifBlank { "饮水机" }) {
-                        KeyValueRow("标签 ID", state.tagId)
-                        KeyValueRow("SN", state.device.sourceValue)
+                    SectionCard(title = bind.device.detail.name.ifBlank { "饮水机" }) {
+                        KeyValueRow("标签 ID", bind.tagId)
+                        KeyValueRow("SN", bind.device.sourceValue)
                         Text(
-                            if (state.binding) {
+                            if (bind.binding) {
                                 "正在写入标签映射，请稍候…"
                             } else {
                                 "绑定后，碰一下该标签即可快速解析这台设备。"
@@ -129,45 +131,43 @@ fun ScanStateOverlays(
                     Button(
                         onClick = onConfirmBind,
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !state.binding,
+                        enabled = !bind.binding,
                         colors = ButtonDefaults.buttonColorsPrimary(),
                     ) {
-                        Text(if (state.binding) "正在绑定…" else "绑定并继续")
+                        Text(if (bind.binding) "正在绑定…" else "绑定并继续")
                     }
                     TextButton(
                         text = "跳过",
                         onClick = onSkipBind,
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !state.binding,
+                        enabled = !bind.binding,
                     )
                 }
             }
+        }
 
-            is ScanState.Message -> OverlayDialog(
-                show = true,
-                title = "提示",
-                summary = state.text,
-                onDismissRequest = onReset,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onReset,
+        OverlayDialog(
+            show = message != null && state is ScanState.Message,
+            title = "提示",
+            summary = message?.text,
+            onDismissRequest = onReset,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onReset,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColorsPrimary(),
+                ) {
+                    Text("重新扫码")
+                }
+                message?.rawUrl?.let { url ->
+                    TextButton(
+                        text = "打开支付宝",
+                        onClick = { onOpenAlipay(url) },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                    ) {
-                        Text("重新扫码")
-                    }
-                    state.rawUrl?.let { url ->
-                        TextButton(
-                            text = "打开支付宝",
-                            onClick = { onOpenAlipay(url) },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                    )
                 }
             }
-
-            else -> Unit
         }
     }
 }

@@ -37,6 +37,7 @@ import io.github.winddrift.fuckpangguai.net.dto.TicketLog
 import io.github.winddrift.fuckpangguai.net.userMessage
 import io.github.winddrift.fuckpangguai.ui.components.EmptyState
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
+import io.github.winddrift.fuckpangguai.ui.components.rememberLastNonNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -333,22 +334,22 @@ private fun TicketRefundSheet(
     onDismiss: () -> Unit,
     onSubmit: (String, String) -> Unit,
 ) {
-    if (ticket == null) return
+    val sheetTicket = rememberLastNonNull(ticket)
     val colors = MiuixTheme.colorScheme
-    var account by remember(ticket.shopId) { mutableStateOf("") }
-    var name by remember(ticket.shopId) { mutableStateOf("") }
-    val needsFile = ticket.isRefundNeedFile == 1
+    var account by remember(ticket?.shopId) { mutableStateOf("") }
+    var name by remember(ticket?.shopId) { mutableStateOf("") }
+    val needsFile = ticket?.isRefundNeedFile == 1
     val canSubmit = !submitting && !needsFile && account.isNotBlank() && name.isNotBlank()
 
     OverlayBottomSheet(
-        show = true,
+        show = ticket != null,
         title = "退款至支付宝",
         onDismissRequest = onDismiss,
     ) {
+        sheetTicket?.let { ticket ->
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
                 .imePadding()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -419,6 +420,7 @@ private fun TicketRefundSheet(
                     Text(if (submitting) "提交中…" else "提交退款")
                 }
             }
+        }
         }
     }
 }

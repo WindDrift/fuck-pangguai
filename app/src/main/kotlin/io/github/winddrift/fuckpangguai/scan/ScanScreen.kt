@@ -373,36 +373,33 @@ fun ScanScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
-        if (manualInput) {
-            OverlayBottomSheet(
-                show = true,
-                title = "手动输入",
-                onDismissRequest = { manualInput = false },
+        OverlayBottomSheet(
+            show = manualInput,
+            title = "手动输入",
+            onDismissRequest = { manualInput = false },
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .imePadding(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                TextField(
+                    value = manualText,
+                    onValueChange = { manualText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "二维码内容或 NQT/SN/IMEI",
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submitManualInput() }),
+                )
+                Button(
+                    onClick = { submitManualInput() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = manualText.isNotBlank(),
+                    colors = ButtonDefaults.buttonColorsPrimary(),
                 ) {
-                    TextField(
-                        value = manualText,
-                        onValueChange = { manualText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = "二维码内容或 NQT/SN/IMEI",
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { submitManualInput() }),
-                    )
-                    Button(
-                        onClick = { submitManualInput() },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = manualText.isNotBlank(),
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                    ) {
-                        Text("识别")
-                    }
+                    Text("识别")
                 }
             }
         }

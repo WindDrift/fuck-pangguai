@@ -24,6 +24,7 @@ import io.github.winddrift.fuckpangguai.account.displayName
 import io.github.winddrift.fuckpangguai.ui.components.AccountAvatar
 import io.github.winddrift.fuckpangguai.ui.components.ConfirmDialog
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
+import io.github.winddrift.fuckpangguai.ui.components.rememberLastNonNull
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
@@ -116,14 +117,14 @@ fun AccountSwitchSheet(
         }
     }
 
-    val target = renameTarget
-    if (target != null) {
-        OverlayDialog(
-            show = true,
-            title = "重命名账号",
-            summary = "仅修改本机显示名称，不会同步到服务器。",
-            onDismissRequest = { renameTarget = null },
-        ) {
+    val target = rememberLastNonNull(renameTarget)
+    OverlayDialog(
+        show = renameTarget != null,
+        title = "重命名账号",
+        summary = "仅修改本机显示名称，不会同步到服务器。",
+        onDismissRequest = { renameTarget = null },
+    ) {
+        target?.let {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextField(
                     value = renameValue,
