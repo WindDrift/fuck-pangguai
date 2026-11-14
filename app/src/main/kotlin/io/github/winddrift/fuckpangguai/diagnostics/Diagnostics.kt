@@ -130,12 +130,18 @@ class Diagnostics(
     override fun startTrace(trace: WaterTrace) {
         if (!settings.value.enabled) return
         val sanitized = sanitizeTrace(trace)
-        synchronized(lock) {
-            if (activeTraces.containsKey(sanitized.traceId)) return
-            activeTraces[sanitized.traceId] = sanitized
+        val merged = synchronized(lock) {
+            val existing = activeTraces[sanitized.traceId]
+            val next = if (existing == null) {
+                sanitized
+            } else {
+                mergeTraceStart(existing, sanitized)
+            }
+            activeTraces[sanitized.traceId] = next
             lastTraceId = sanitized.traceId
+            next
         }
-        writer.submitTrace(sanitized)
+        writer.submitTrace(merged)
     }
 
     override fun stageStart(
@@ -403,4 +409,21 @@ class Diagnostics(
         const val MAX_CRASHES = 20
         const val BYTES_PER_MB = 1024L * 1024L
     }
+}
+
+/**
+ * 合并同一 traceId 的两次 [DiagSink.startTrace]：保留首建的骨架，用后来的非空字段补位。
+ *
+ * 首建时没有设备名与 goodsId，确认页续接同一条 trace 时必须把富化信息合并进来，
+ * 否则失败链路导出的 trace 只能显示"未知设备"。已终态的 trace 不被改写。
+ */
+internal fun mergeTraceStart(existing: WaterTrace, incoming: WaterTrace): WaterTrace {
+    if (existing.outcome != TraceOutcome.Running) return existing
+    return existing.copy(
+        source = existing.source.ifBlank { incoming.source },
+        deviceName = existing.deviceName.ifBlank { incoming.deviceName },
+        goodsId = existing.goodsId.ifBlank { incoming.goodsId },
+        decodeMs = if (existing.decodeMs > 0L) existing.decodeMs else incoming.decodeMs,
+        updatedAt = maxOf(existing.updatedAt, incoming.updatedAt),
+    )
 }

@@ -6,6 +6,7 @@ import io.github.winddrift.fuckpangguai.diagnostics.FakeDiagSink
 import io.github.winddrift.fuckpangguai.diagnostics.model.StageOutcome
 import io.github.winddrift.fuckpangguai.diagnostics.model.TraceOutcome
 import io.github.winddrift.fuckpangguai.diagnostics.model.TraceStage
+import io.github.winddrift.fuckpangguai.diagnostics.model.WaterTrace
 import io.github.winddrift.fuckpangguai.location.GeoPoint
 import io.github.winddrift.fuckpangguai.location.LocationSource
 import io.github.winddrift.fuckpangguai.net.dto.AfterPay
@@ -56,6 +57,27 @@ class ConfirmControllerTraceTest {
         assertEquals(TraceOutcome.Running, trace.outcome)
         val session = (controller.state.value as ConfirmState.Unlocked).session
         assertEquals(traceId, session.traceId)
+    }
+
+    @Test
+    fun `scan trace keeps device info from confirm page`() = runTest {
+        val deps = Deps()
+        // 扫码阶段先建了一条只有来源的 trace，没有设备名与 goodsId。
+        deps.sink.startTrace(
+            WaterTrace(
+                traceId = traceId,
+                startedAt = 1_000,
+                updatedAt = 1_000,
+                source = "扫码",
+            ),
+        )
+        val controller = deps.controller(this)
+        controller.start(deps.device)
+        advanceUntilIdle()
+
+        val trace = deps.sink.trace(traceId)
+        assertEquals("水机", trace.deviceName)
+        assertEquals("goods-1", trace.goodsId)
     }
 
     @Test

@@ -18,6 +18,11 @@ interface DiagSink {
         fields: Map<String, String> = emptyMap(),
     )
 
+    /**
+     * 确保 trace 存在：同一 traceId 的重复调用是幂等的，并且必须用非空的
+     * deviceName、goodsId、source 与 decodeMs 补位，不得丢弃后到的富化信息。
+     * 已终态的 trace 不被改写。
+     */
     fun startTrace(trace: WaterTrace)
 
     fun stageStart(
@@ -45,6 +50,7 @@ interface DiagSink {
         error: String = "",
     )
 
+    /** 用整条 trace 覆盖；实现方应拒绝终态被 Running 覆盖与 updatedAt 回退。 */
     fun replaceTrace(trace: WaterTrace)
 
     fun currentTrace(): WaterTrace?

@@ -35,7 +35,8 @@ class FakeDiagSink : DiagSink {
     }
 
     override fun startTrace(trace: WaterTrace) {
-        traces.putIfAbsent(trace.traceId, trace)
+        val existing = traces[trace.traceId]
+        traces[trace.traceId] = if (existing == null) trace else mergeTraceStart(existing, trace)
     }
 
     override fun stageStart(
