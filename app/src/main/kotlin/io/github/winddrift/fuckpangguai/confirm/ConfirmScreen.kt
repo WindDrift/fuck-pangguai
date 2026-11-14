@@ -4,7 +4,6 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -30,14 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.winddrift.fuckpangguai.device.ResolvedDevice
 import io.github.winddrift.fuckpangguai.net.dto.Sku
-import io.github.winddrift.fuckpangguai.ui.animation.ColorSpringSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentFadeSpec
 import io.github.winddrift.fuckpangguai.ui.animation.ContentSlideSpec
 import io.github.winddrift.fuckpangguai.ui.components.ConfirmDialog
@@ -49,14 +42,12 @@ import io.github.winddrift.fuckpangguai.ui.components.StatusCard
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
-import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 fun ConfirmScreen(
@@ -253,23 +244,34 @@ fun ConfirmScreen(
                     }
 
                     item { SmallTitle("套餐") }
-                    itemsIndexed(ready.skus) { index, sku ->
-                        SelectionCard(
-                            selected = index == ready.selectedSkuIndex,
-                            title = sku.name,
-                            summary = skuPrice(sku),
-                            onClick = { onSelectSku(index) },
-                        )
+                    item {
+                        Card(insideMargin = PaddingValues(0.dp)) {
+                            Column {
+                                ready.skus.forEachIndexed { index, sku ->
+                                    RadioButtonPreference(
+                                        title = sku.name,
+                                        summary = skuPrice(sku),
+                                        selected = index == ready.selectedSkuIndex,
+                                        onClick = { onSelectSku(index) },
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     item { SmallTitle("支付方式（后付费）") }
-                    itemsIndexed(ready.channels) { index, channel ->
-                        SelectionCard(
-                            selected = index == ready.selectedChannelIndex,
-                            title = channel.methodName,
-                            summary = null,
-                            onClick = { onSelectChannel(index) },
-                        )
+                    item {
+                        Card(insideMargin = PaddingValues(0.dp)) {
+                            Column {
+                                ready.channels.forEachIndexed { index, channel ->
+                                    RadioButtonPreference(
+                                        title = channel.methodName,
+                                        selected = index == ready.selectedChannelIndex,
+                                        onClick = { onSelectChannel(index) },
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     item {
@@ -329,70 +331,6 @@ private fun ScrollColumn(content: @Composable androidx.compose.foundation.layout
         verticalArrangement = Arrangement.spacedBy(12.dp),
         content = content,
     )
-}
-
-@Composable
-private fun SelectionCard(
-    selected: Boolean,
-    title: String,
-    summary: String?,
-    onClick: () -> Unit,
-) {
-    val colors = MiuixTheme.colorScheme
-    val containerColor by animateColorAsState(
-        targetValue = if (selected) colors.primaryContainer else colors.surfaceContainer,
-        animationSpec = ColorSpringSpec,
-        label = "selectionContainer",
-    )
-    val contentColor by animateColorAsState(
-        targetValue = if (selected) colors.onPrimaryContainer else colors.onSurface,
-        animationSpec = ColorSpringSpec,
-        label = "selectionContent",
-    )
-    val summaryColor by animateColorAsState(
-        targetValue = if (selected) {
-            colors.onPrimaryContainer.copy(alpha = 0.72f)
-        } else {
-            colors.onSurfaceSecondary
-        },
-        animationSpec = ColorSpringSpec,
-        label = "selectionSummary",
-    )
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics {
-                role = Role.RadioButton
-                this.selected = selected
-            },
-        insideMargin = PaddingValues(0.dp),
-        colors = CardDefaults.defaultColors(
-            color = containerColor,
-            contentColor = contentColor,
-        ),
-        pressFeedbackType = PressFeedbackType.Sink,
-        onClick = onClick,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MiuixTheme.textStyles.body1)
-                if (summary != null) {
-                    Text(
-                        summary,
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = summaryColor,
-                    )
-                }
-            }
-            RadioButton(selected = selected, onClick = null)
-        }
-    }
 }
 
 private fun skuPrice(sku: Sku): String {
