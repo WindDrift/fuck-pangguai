@@ -1,6 +1,5 @@
 package io.github.winddrift.fuckpangguai.settings
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,7 +25,6 @@ fun LogoutOptionsDialog(
     onDismiss: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
-    BackHandler(enabled = show) { onDismiss() }
     OverlayDialog(
         show = show,
         title = "退出当前账号？",

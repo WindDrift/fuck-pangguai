@@ -1,6 +1,5 @@
 package io.github.winddrift.fuckpangguai.history
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -129,8 +128,6 @@ fun HistoryScreen(
     LaunchedEffect(selectedId, state.records) {
         if (selectedId != null && selectedRecord == null) selectedId = null
     }
-
-    BackHandler(enabled = selectedId != null) { selectedId = null }
 
     PullToRefresh(
         isRefreshing = state.loading || state.syncing,

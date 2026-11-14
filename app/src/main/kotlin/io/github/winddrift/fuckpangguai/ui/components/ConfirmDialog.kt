@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.BackHandler
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
@@ -26,7 +25,6 @@ fun ConfirmDialog(
     onDismiss: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
-    BackHandler(enabled = show) { onDismiss() }
     OverlayDialog(
         show = show,
         title = title,

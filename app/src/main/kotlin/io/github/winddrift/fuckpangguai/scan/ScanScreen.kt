@@ -7,7 +7,6 @@ import android.net.Uri
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -215,8 +214,6 @@ fun ScanScreen(
     }
 
     NfcReader(availability = nfc, onPayload = controller::onNfc)
-
-    BackHandler(enabled = manualInput) { manualInput = false }
 
     fun submitManualInput() {
         if (manualText.isBlank()) return
