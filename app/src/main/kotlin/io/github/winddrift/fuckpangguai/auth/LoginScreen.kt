@@ -19,15 +19,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -77,11 +76,11 @@ fun LoginScreen(
 ) {
     val colors = MiuixTheme.colorScheme
     val focusManager = LocalFocusManager.current
-    var phone by rememberSaveable { mutableStateOf("") }
-    var code by rememberSaveable { mutableStateOf("") }
+    val phone = rememberTextFieldState()
+    val code = rememberTextFieldState()
 
     LaunchedEffect(prefillPhone) {
-        if (prefillPhone.isNotBlank()) phone = prefillPhone
+        if (prefillPhone.isNotBlank()) phone.setTextAndPlaceCursorAtEnd(prefillPhone)
     }
 
     val title = when (target) {
@@ -89,8 +88,8 @@ fun LoginScreen(
         is AuthTarget.Reauth -> "重新登录"
         AuthTarget.None -> stringResource(R.string.app_name)
     }
-    val phoneInvalid = phone.isNotBlank() && phone.length != 11
-    val codeInvalid = code.isNotBlank() && code.length != 6
+    val phoneInvalid = phone.text.isNotBlank() && phone.text.length != 11
+    val codeInvalid = code.text.isNotBlank() && code.text.length != 6
     val subtitle = when (target) {
         AuthTarget.AddAccount -> "登录另一个胖乖生活账号，当前账号会保留。"
         is AuthTarget.Reauth -> "该账号的登录已失效，请重新验证手机号。"
@@ -194,11 +193,10 @@ fun LoginScreen(
                     color = colors.onSurfaceSecondary,
                 )
                 TextField(
-                    value = phone,
-                    onValueChange = { phone = it },
+                    state = phone,
                     modifier = Modifier.fillMaxWidth(),
                     label = "手机号",
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     colors = TextFieldDefaults.textFieldColors(
                         labelColor = if (phoneInvalid) colors.error else colors.onSurfaceSecondary,
                         borderColor = if (phoneInvalid) colors.error else colors.outline,
@@ -207,16 +205,15 @@ fun LoginScreen(
                         keyboardType = KeyboardType.Phone,
                         imeAction = ImeAction.Next,
                     ),
-                    keyboardActions = KeyboardActions(
-                        onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                    ),
+                    onKeyboardAction = KeyboardActionHandler {
+                        focusManager.moveFocus(FocusDirection.Down)
+                    },
                 )
                 TextField(
-                    value = code,
-                    onValueChange = { code = it },
+                    state = code,
                     modifier = Modifier.fillMaxWidth(),
                     label = "验证码",
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     colors = TextFieldDefaults.textFieldColors(
                         labelColor = if (codeInvalid) colors.error else colors.onSurfaceSecondary,
                         borderColor = if (codeInvalid) colors.error else colors.outline,
@@ -225,9 +222,9 @@ fun LoginScreen(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done,
                     ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { if (!busy) onLogin(phone, code) },
-                    ),
+                    onKeyboardAction = KeyboardActionHandler {
+                        if (!busy) onLogin(phone.text.toString(), code.text.toString())
+                    },
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -235,12 +232,12 @@ fun LoginScreen(
                 ) {
                     TextButton(
                         text = if (codeSent) "重新发送验证码" else "发送验证码",
-                        onClick = { onSendCode(phone) },
+                        onClick = { onSendCode(phone.text.toString()) },
                         enabled = !busy,
                     )
                 }
                 Button(
-                    onClick = { onLogin(phone, code) },
+                    onClick = { onLogin(phone.text.toString(), code.text.toString()) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy,
                     colors = ButtonDefaults.buttonColorsPrimary(),
