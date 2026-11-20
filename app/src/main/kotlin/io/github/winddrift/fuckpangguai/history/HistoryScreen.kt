@@ -145,14 +145,6 @@ fun HistoryScreen(
                 },
             )
 
-            if (visibleRecords.isNotEmpty()) {
-                HistorySummaryCard(
-                    summary = summary,
-                    conversion = waterConversion,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
-                )
-            }
-
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -165,6 +157,15 @@ fun HistoryScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (visibleRecords.isNotEmpty()) {
+                    item(key = "summary") {
+                        HistorySummaryCard(
+                            summary = summary,
+                            conversion = waterConversion,
+                        )
+                    }
+                }
+
                 if (showHeader) item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (showCount) {
