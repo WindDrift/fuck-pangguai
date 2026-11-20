@@ -469,7 +469,7 @@ private fun PointsTaskCard(
         Text(
             text = statusText,
             style = MiuixTheme.textStyles.footnote1,
-            color = if (task.completed) colors.onSurfaceSecondary else colors.onSurfaceSecondary,
+            color = colors.onSurfaceSecondary,
         )
     }
 }
