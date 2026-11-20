@@ -193,6 +193,14 @@ flowchart LR
 - 效果限制在头部区域，约 30fps；应用退到后台、滚出头部或系统关闭动画时暂停，避免持续 GPU 开销。
 - 着色器与浅/深配色改编自 compose-miuix-ui（Apache-2.0）；构造失败时回退为纯色。
 
+## 系统栏与弹层 insets
+
+- 主窗口经 `enableEdgeToEdge()` 全面屏绘制，主题状态栏/导航栏透明；手势小白条始终可见，应用背景延伸到其后方，内容不得被小白条遮挡。
+- Miuix 的 `Scaffold`、`TopAppBar`、`NavigationBar`、`FloatingNavigationBar`、`OverlayDialog` 自带系统栏 insets 处理，不要重复叠加。
+- Miuix 0.9.5-beta02 的 `OverlayBottomSheet`/`WindowBottomSheet` 的 `defaultWindowInsetsPadding` 只应用 `imePadding()`，不含导航栏；弹层内容必须自行 `navigationBarsPadding()`。这不是重复补丁，移除会导致内容压到小白条下。
+- 自定义 `BottomActionBar` 同样自行 `navigationBarsPadding()`，且背景绘制在 padding 之前，使背景延伸到小白条后方。
+- 扫码、登录、免责、关于页自管 insets，跳过 Scaffold 下发的 `innerPadding`，避免重复消费。
+
 ## 相关文档
 
 - [构建指南](build.md)
