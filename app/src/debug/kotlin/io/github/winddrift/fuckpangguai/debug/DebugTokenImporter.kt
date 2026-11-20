@@ -3,11 +3,8 @@ package io.github.winddrift.fuckpangguai.debug
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Button
@@ -17,19 +14,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun DebugTokenImportSection(onToken: (String) -> Unit) {
-    var token by remember { mutableStateOf("") }
+    val token = rememberTextFieldState()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Debug：粘贴 token", style = MiuixTheme.textStyles.footnote1)
         TextField(
-            value = token,
-            onValueChange = { token = it },
+            state = token,
             modifier = Modifier.fillMaxWidth(),
             label = "token",
         )
         Button(
-            onClick = { onToken(token) },
+            onClick = { onToken(token.text.toString()) },
             modifier = Modifier.fillMaxWidth(),
-            enabled = token.isNotBlank(),
+            enabled = token.text.isNotBlank(),
         ) {
             Text("导入 token")
         }

@@ -20,6 +20,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.byValue
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,6 +70,7 @@ import io.github.winddrift.fuckpangguai.ui.components.KeyValueRow
 import io.github.winddrift.fuckpangguai.ui.components.LocalSnackbar
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceDivider
 import io.github.winddrift.fuckpangguai.ui.components.PreferenceGroup
+import io.github.winddrift.fuckpangguai.ui.components.rememberSyncedTextFieldState
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -607,6 +613,9 @@ private fun EventsTab(
         events.applyFilter(filter.copy(limit = Int.MAX_VALUE), System.currentTimeMillis()).size
     }
     val chips = eventChips(filter, onFilterChange)
+    val queryState = rememberSyncedTextFieldState(filter.query) { query ->
+        onFilterChange { it.copy(query = query, limit = EventFilter.DEFAULT_LIMIT) }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -622,13 +631,10 @@ private fun EventsTab(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 TextField(
-                    value = filter.query,
-                    onValueChange = { query ->
-                        onFilterChange { it.copy(query = query, limit = EventFilter.DEFAULT_LIMIT) }
-                    },
+                    state = queryState,
                     modifier = Modifier.weight(1f),
                     label = "搜索事件",
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                 )
                 if (filter.query.isNotBlank()) {
                     IconButton(
@@ -899,6 +905,9 @@ private fun TracesTab(
     }
     val stats = remember(filtered) { computeTraceStats(filtered) }
     val chips = traceChips(filter, onFilterChange)
+    val queryState = rememberSyncedTextFieldState(filter.deviceQuery) { query ->
+        onFilterChange { it.copy(deviceQuery = query) }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -914,11 +923,10 @@ private fun TracesTab(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 TextField(
-                    value = filter.deviceQuery,
-                    onValueChange = { query -> onFilterChange { it.copy(deviceQuery = query) } },
+                    state = queryState,
                     modifier = Modifier.weight(1f),
                     label = "搜索设备 / goodsId / trace",
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                 )
                 if (filter.deviceQuery.isNotBlank()) {
                     IconButton(
@@ -1323,11 +1331,12 @@ private fun NumberSettingSheet(
     onDismiss: () -> Unit,
     onSave: (Int) -> Unit,
 ) {
-    var input by remember { mutableStateOf(value.toString()) }
+    val input = rememberTextFieldState()
     LaunchedEffect(show, value) {
-        if (show) input = value.toString()
+        if (show) input.setTextAndPlaceCursorAtEnd(value.toString())
     }
-    val parsed = input.toIntOrNull()
+    val inputText = input.text.toString()
+    val parsed = inputText.toIntOrNull()
     val valid = parsed != null && parsed in range
 
     OverlayBottomSheet(
@@ -1343,18 +1352,18 @@ private fun NumberSettingSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             TextField(
-                value = input,
-                onValueChange = { text -> input = text.filter { it.isDigit() }.take(3) },
+                state = input,
                 modifier = Modifier.fillMaxWidth(),
                 label = "$title（${range.first}-${range.last} $unit）",
-                singleLine = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
+                inputTransformation = DigitInputTransformation,
                 colors = TextFieldDefaults.textFieldColors(
-                    labelColor = if (input.isNotBlank() && !valid) {
+                    labelColor = if (inputText.isNotBlank() && !valid) {
                         MiuixTheme.colorScheme.error
                     } else {
                         MiuixTheme.colorScheme.onSurfaceSecondary
                     },
-                    borderColor = if (input.isNotBlank() && !valid) {
+                    borderColor = if (inputText.isNotBlank() && !valid) {
                         MiuixTheme.colorScheme.error
                     } else {
                         MiuixTheme.colorScheme.outline
@@ -1375,6 +1384,10 @@ private fun NumberSettingSheet(
             }
         }
     }
+}
+
+private val DigitInputTransformation = InputTransformation.byValue { _, proposed ->
+    proposed.filter { it.isDigit() }.take(3)
 }
 
 private val diagJson = Json { encodeDefaults = true }
