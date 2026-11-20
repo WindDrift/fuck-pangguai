@@ -7,15 +7,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.byValue
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -46,20 +49,23 @@ internal fun WaterConversionSheet(
 ) {
     val colors = MiuixTheme.colorScheme
     val focusManager = LocalFocusManager.current
-    var usageBase by remember { mutableStateOf("") }
-    var waterMl by remember { mutableStateOf("") }
-    var cupMl by remember { mutableStateOf("") }
+    val usageBase = rememberTextFieldState()
+    val waterMl = rememberTextFieldState()
+    val cupMl = rememberTextFieldState()
 
     LaunchedEffect(show, conversion) {
         if (show) {
-            usageBase = conversion?.usageBase?.toPlainInput().orEmpty()
-            waterMl = conversion?.waterMl?.toPlainInput().orEmpty()
-            cupMl = conversion?.cupMl?.toPlainInput().orEmpty()
+            usageBase.setTextAndPlaceCursorAtEnd(conversion?.usageBase?.toPlainInput().orEmpty())
+            waterMl.setTextAndPlaceCursorAtEnd(conversion?.waterMl?.toPlainInput().orEmpty())
+            cupMl.setTextAndPlaceCursorAtEnd(conversion?.cupMl?.toPlainInput().orEmpty())
         }
     }
 
-    val validation = remember(usageBase, waterMl, cupMl) {
-        validateWaterConversion(usageBase, waterMl, cupMl)
+    val usageText = usageBase.text.toString()
+    val waterText = waterMl.text.toString()
+    val cupText = cupMl.text.toString()
+    val validation = remember(usageText, waterText, cupText) {
+        validateWaterConversion(usageText, waterText, cupText)
     }
     val valid = validation as? WaterConversionValidation.Valid
     val empty = validation is WaterConversionValidation.Empty
@@ -95,45 +101,40 @@ internal fun WaterConversionSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 DecimalField(
-                    value = usageBase,
-                    onValueChange = { usageBase = it },
+                    state = usageBase,
                     label = "用量",
                     modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Next,
                     ),
-                    keyboardActions = KeyboardActions(
-                        onNext = { focusManager.moveFocus(FocusDirection.Right) },
-                    ),
+                    onKeyboardAction = KeyboardActionHandler {
+                        focusManager.moveFocus(FocusDirection.Right)
+                    },
                 )
                 DecimalField(
-                    value = waterMl,
-                    onValueChange = { waterMl = it },
+                    state = waterMl,
                     label = "水量（mL）",
                     modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Next,
                     ),
-                    keyboardActions = KeyboardActions(
-                        onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                    ),
+                    onKeyboardAction = KeyboardActionHandler {
+                        focusManager.moveFocus(FocusDirection.Down)
+                    },
                 )
             }
 
             DecimalField(
-                value = cupMl,
-                onValueChange = { cupMl = it },
+                state = cupMl,
                 label = "一杯容量（mL，可选）",
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Decimal,
                     imeAction = ImeAction.Done,
                 ),
-                keyboardActions = KeyboardActions(
-                    onDone = { focusManager.clearFocus() },
-                ),
+                onKeyboardAction = KeyboardActionHandler { focusManager.clearFocus() },
             )
 
             when (validation) {
@@ -195,35 +196,32 @@ internal fun WaterConversionSheet(
 
 @Composable
 private fun DecimalField(
-    value: String,
-    onValueChange: (String) -> Unit,
+    state: TextFieldState,
     label: String,
     modifier: Modifier = Modifier,
     keyboardOptions: KeyboardOptions,
-    keyboardActions: KeyboardActions,
+    onKeyboardAction: KeyboardActionHandler? = null,
 ) {
     val colors = MiuixTheme.colorScheme
+    val text = state.text.toString()
+    val invalid = text.isNotBlank() && text.toDoubleOrNull() == null
     TextField(
-        value = value,
-        onValueChange = { onValueChange(sanitizeDecimalInput(it)) },
+        state = state,
         modifier = modifier,
         label = label,
-        singleLine = true,
+        lineLimits = TextFieldLineLimits.SingleLine,
+        inputTransformation = DecimalInputTransformation,
         colors = TextFieldDefaults.textFieldColors(
-            labelColor = if (value.isNotBlank() && value.toDoubleOrNull() == null) {
-                colors.error
-            } else {
-                colors.onSurfaceSecondary
-            },
-            borderColor = if (value.isNotBlank() && value.toDoubleOrNull() == null) {
-                colors.error
-            } else {
-                colors.outline
-            },
+            labelColor = if (invalid) colors.error else colors.onSurfaceSecondary,
+            borderColor = if (invalid) colors.error else colors.outline,
         ),
         keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions,
+        onKeyboardAction = onKeyboardAction,
     )
+}
+
+private val DecimalInputTransformation = InputTransformation.byValue { _, proposed ->
+    sanitizeDecimalInput(proposed.toString())
 }
 
 private fun sanitizeDecimalInput(raw: String): String {

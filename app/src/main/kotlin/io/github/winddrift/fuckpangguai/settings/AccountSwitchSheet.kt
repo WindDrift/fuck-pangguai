@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +52,7 @@ fun AccountSwitchSheet(
     onDelete: (String) -> Unit,
 ) {
     var renameTarget by remember { mutableStateOf<StoredAccount?>(null) }
-    var renameValue by remember { mutableStateOf("") }
+    val renameValue = rememberTextFieldState()
     var deleteTarget by remember { mutableStateOf<StoredAccount?>(null) }
 
     LaunchedEffect(show) {
@@ -99,7 +102,7 @@ fun AccountSwitchSheet(
                         },
                         onRename = {
                             renameTarget = account
-                            renameValue = account.alias.ifBlank { account.nickname }
+                            renameValue.setTextAndPlaceCursorAtEnd(account.alias.ifBlank { account.nickname })
                         },
                         onDelete = { deleteTarget = account },
                     )
@@ -128,11 +131,10 @@ fun AccountSwitchSheet(
         target?.let {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextField(
-                    value = renameValue,
-                    onValueChange = { renameValue = it },
+                    state = renameValue,
                     modifier = Modifier.fillMaxWidth(),
                     label = "显示名称",
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -145,11 +147,11 @@ fun AccountSwitchSheet(
                     )
                     Button(
                         onClick = {
-                            onRename(target.localId, renameValue)
+                            onRename(target.localId, renameValue.text.toString())
                             renameTarget = null
                         },
                         modifier = Modifier.weight(1f),
-                        enabled = renameValue.isNotBlank(),
+                        enabled = renameValue.text.isNotBlank(),
                         colors = ButtonDefaults.buttonColorsPrimary(),
                     ) {
                         Text("保存")

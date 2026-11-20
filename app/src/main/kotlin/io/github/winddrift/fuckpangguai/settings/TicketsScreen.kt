@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -308,10 +310,10 @@ private fun TicketRefundSheet(
 ) {
     val sheetTicket = rememberLastNonNull(ticket)
     val colors = MiuixTheme.colorScheme
-    var account by remember(ticket?.shopId) { mutableStateOf("") }
-    var name by remember(ticket?.shopId) { mutableStateOf("") }
+    val account = remember(ticket?.shopId) { TextFieldState() }
+    val name = remember(ticket?.shopId) { TextFieldState() }
     val needsFile = ticket?.isRefundNeedFile == 1
-    val canSubmit = !submitting && !needsFile && account.isNotBlank() && name.isNotBlank()
+    val canSubmit = !submitting && !needsFile && account.text.isNotBlank() && name.text.isNotBlank()
 
     OverlayBottomSheet(
         show = ticket != null,
@@ -346,18 +348,17 @@ private fun TicketRefundSheet(
                 )
             }
             TextField(
-                value = account,
-                onValueChange = { account = it },
+                state = account,
                 modifier = Modifier.fillMaxWidth(),
                 label = "支付宝账号（手机号）",
-                singleLine = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
                 colors = TextFieldDefaults.textFieldColors(
-                    labelColor = if (account.isNotBlank() && account.length != 11) {
+                    labelColor = if (account.text.isNotBlank() && account.text.length != 11) {
                         colors.error
                     } else {
                         colors.onSurfaceSecondary
                     },
-                    borderColor = if (account.isNotBlank() && account.length != 11) {
+                    borderColor = if (account.text.isNotBlank() && account.text.length != 11) {
                         colors.error
                     } else {
                         colors.outline
@@ -369,11 +370,10 @@ private fun TicketRefundSheet(
                 ),
             )
             TextField(
-                value = name,
-                onValueChange = { name = it },
+                state = name,
                 modifier = Modifier.fillMaxWidth(),
                 label = "支付宝实名姓名",
-                singleLine = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Text,
                     imeAction = ImeAction.Done,
@@ -397,7 +397,7 @@ private fun TicketRefundSheet(
                     enabled = !submitting,
                 )
                 Button(
-                    onClick = { onSubmit(account.trim(), name.trim()) },
+                    onClick = { onSubmit(account.text.toString().trim(), name.text.toString().trim()) },
                     enabled = canSubmit,
                     colors = ButtonDefaults.buttonColorsPrimary(),
                 ) {
