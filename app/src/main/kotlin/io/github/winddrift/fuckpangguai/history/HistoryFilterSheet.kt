@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +42,7 @@ import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import io.github.winddrift.fuckpangguai.ui.components.ChoiceChip
 import io.github.winddrift.fuckpangguai.ui.components.SectionCard
+import io.github.winddrift.fuckpangguai.ui.components.rememberSyncedTextFieldState
 
 @Composable
 internal fun HistoryFilterSheet(
@@ -496,9 +499,10 @@ private fun MultiSelectContent(
             .distinct()
             .sortedWith(compareBy<String> { it.isBlank() }.thenBy { it })
     }
-    var query by remember { mutableStateOf("") }
-    val visible = remember(query, allOptions) {
-        val trimmed = query.trim()
+    val query = rememberTextFieldState()
+    val queryText = query.text.toString()
+    val visible = remember(queryText, allOptions) {
+        val trimmed = queryText.trim()
         if (trimmed.isBlank()) {
             allOptions
         } else {
@@ -531,11 +535,10 @@ private fun MultiSelectContent(
 
     if (allOptions.size > 8) {
         TextField(
-            value = query,
-            onValueChange = { query = it },
+            state = query,
             modifier = Modifier.fillMaxWidth(),
             label = "搜索选项",
-            singleLine = true,
+            lineLimits = TextFieldLineLimits.SingleLine,
         )
     }
 
@@ -596,24 +599,28 @@ private fun AmountRangeFields(
     onRangeChange: (AmountRange) -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
+    val minState = rememberSyncedTextFieldState(range.minText) {
+        onRangeChange(range.copy(minText = it))
+    }
+    val maxState = rememberSyncedTextFieldState(range.maxText) {
+        onRangeChange(range.copy(maxText = it))
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         TextField(
-            value = range.minText,
-            onValueChange = { onRangeChange(range.copy(minText = it)) },
+            state = minState,
             modifier = Modifier.weight(1f),
             label = minLabel,
-            singleLine = true,
+            lineLimits = TextFieldLineLimits.SingleLine,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
         TextField(
-            value = range.maxText,
-            onValueChange = { onRangeChange(range.copy(maxText = it)) },
+            state = maxState,
             modifier = Modifier.weight(1f),
             label = maxLabel,
-            singleLine = true,
+            lineLimits = TextFieldLineLimits.SingleLine,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
     }
