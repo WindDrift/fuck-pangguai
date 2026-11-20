@@ -120,7 +120,7 @@ Release 与 diagnostic 默认开启 R8 与资源压缩。缺少签名配置不�
 
 ### 找不到 Android SDK
 
-确认 `local.properties` 的 `sdk.dir` 或 `ANDROID_HOME` 指向已安装 Platform 37 的 SDK。路径使用本机实际位置，不要照搬他人的示例。
+确认 `local.properties` 的 `sdk.dir` 或 `ANDROID_HOME` 指向已安装 Platform 37.2 的 SDK。路径使用本机实际位置，不要照搬他人的示例。
 
 ### JDK 版本不匹配
 

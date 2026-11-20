@@ -20,7 +20,7 @@
 
 ### 构建时提示找不到 SDK 或 JDK 版本错误
 
-安装 JDK 21 与 Android SDK Platform 37，并检查 `JAVA_HOME`、`local.properties` 或 `ANDROID_HOME`。详见[构建指南](build.md)。
+安装 JDK 21 与 Android SDK Platform 37.2，并检查 `JAVA_HOME`、`local.properties` 或 `ANDROID_HOME`。详见[构建指南](build.md)。
 
 ## 登录与权限
 
