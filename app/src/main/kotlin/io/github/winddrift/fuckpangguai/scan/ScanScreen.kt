@@ -28,8 +28,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -126,7 +129,7 @@ fun ScanScreen(
     }
 
     var manualInput by rememberSaveable { mutableStateOf(false) }
-    var manualText by rememberSaveable { mutableStateOf("") }
+    val manualText = rememberTextFieldState()
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -217,10 +220,11 @@ fun ScanScreen(
     NfcReader(availability = nfc, onPayload = controller::onNfc)
 
     fun submitManualInput() {
-        if (manualText.isBlank()) return
-        controller.onQr(ScanInput(manualText, ScanSource.Manual))
+        val text = manualText.text.toString()
+        if (text.isBlank()) return
+        controller.onQr(ScanInput(text, ScanSource.Manual))
         manualInput = false
-        manualText = ""
+        manualText.clearText()
     }
 
     Box(
@@ -384,18 +388,17 @@ fun ScanScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 TextField(
-                    value = manualText,
-                    onValueChange = { manualText = it },
+                    state = manualText,
                     modifier = Modifier.fillMaxWidth(),
                     label = "二维码内容或 NQT/SN/IMEI",
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { submitManualInput() }),
+                    onKeyboardAction = KeyboardActionHandler { submitManualInput() },
                 )
                 Button(
                     onClick = { submitManualInput() },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = manualText.isNotBlank(),
+                    enabled = manualText.text.isNotBlank(),
                     colors = ButtonDefaults.buttonColorsPrimary(),
                 ) {
                     Text("识别")
