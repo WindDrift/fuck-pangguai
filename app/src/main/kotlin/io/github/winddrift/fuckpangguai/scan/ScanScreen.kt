@@ -384,6 +384,7 @@ fun ScanScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .imePadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

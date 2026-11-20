@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -52,6 +53,7 @@ fun ScanStateOverlays(
         ) {
             deviceReady?.let { ready ->
                 Column(
+                    modifier = Modifier.navigationBarsPadding(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     DeviceInfoCard(device = ready.device)
@@ -113,6 +115,7 @@ fun ScanStateOverlays(
         ) {
             confirmBind?.let { bind ->
                 Column(
+                    modifier = Modifier.navigationBarsPadding(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     SectionCard(title = bind.device.detail.name.ifBlank { "饮水机" }) {
