@@ -7,11 +7,11 @@
 | 项目 | 版本 |
 | --- | --- |
 | JDK | 21 |
-| Android SDK | Platform 37、Build-Tools 37.0.0 |
+| Android SDK | Platform 37.2、Build-Tools 37.0.0 |
 | Gradle | 使用仓库自带 Wrapper |
 | minSdk | 31（Android 12） |
-| compileSdk / targetSdk | 37 |
-| Kotlin / AGP | 2.4.20 / 9.2.1 |
+| compileSdk / targetSdk | 37.2 / 37 |
+| Kotlin / AGP | 2.4.21 / 9.5.1 |
 
 设置 `JAVA_HOME` 指向 JDK 21，并确保 Android SDK 路径可用。可以在根目录 `local.properties` 写入：
 
@@ -109,7 +109,7 @@ Release 与 diagnostic 默认开启 R8 与资源压缩。缺少签名配置不�
 
 ## 依赖说明
 
-- UI 使用 Miuix `0.9.4`。
+- UI 使用 Miuix `0.9.5-beta02`，依赖 Compose 1.13（BOM 2026.11.01），要求 compileSdk 37.2。
 - 依赖从 Maven Central 与 Google Maven 解析，不需要 GitHub Packages 凭据。
 - 网络层使用 OkHttp、Retrofit 与 kotlinx.serialization；相机使用 CameraX，二维码解码使用 ZXing。
 - 通用小票充值使用支付宝官方 SDK `com.alipay.sdk:alipaysdk-android:15.8.35`，从 Maven Central 解析。该 SDK 为闭源 AAR，会增加 APK 体积；其许可与再分发条件以支付宝官方声明为准。

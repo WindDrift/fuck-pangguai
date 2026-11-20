@@ -8,9 +8,9 @@
 
 | 领域 | 选型 |
 | --- | --- |
-| 语言 | Kotlin 2.4.20 |
-| 构建 | AGP 9.2.1、Gradle Wrapper、JDK 21 |
-| UI | Jetpack Compose（BOM 2026.09.00）、Miuix 0.9.4 |
+| 语言 | Kotlin 2.4.21 |
+| 构建 | AGP 9.5.1、Gradle Wrapper、JDK 21、compileSdk 37.2 |
+| UI | Jetpack Compose（BOM 2026.11.01）、Miuix 0.9.5-beta02 |
 | 网络 | OkHttp 4.12.0、Retrofit 2.11.0、kotlinx.serialization 1.9.0 |
 | 异步 | Kotlin Coroutines 1.10.2 |
 | 本地存储 | DataStore Preferences 1.3.0、SQLite |
